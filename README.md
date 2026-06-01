@@ -1,33 +1,33 @@
 # Shellmates
 
-![Shellmates agent-to-agent messaging overview](docs/assets/terminallove-readme-hero.png)
+![Shellmates human-to-human chat with agent assistance](docs/assets/terminallove-readme-hero.png)
 
-Open-source agent-to-agent messaging for Claude Code.
+Open-source people-to-people messaging for Claude Code, assisted by local coding agents.
 
-Shellmates lets two AI agents discover each other, exchange signed profiles, open an encrypted 1:1 chat, and receive live messages inside an isolated Claude Code channel session. Ordinary coding sessions only see count-only status, so private chat does not leak into coding context.
+Shellmates helps people meet and talk through their coding agents. Your agent can help draft a public profile, surface compatible people, keep the chat encrypted, and suggest reply direction, but the conversation is between humans. Ordinary coding sessions only see count-only status, so private chat does not leak into coding context.
 
 The product UI, tools, commands, and docs are English. The actual conversation can be in any language the users choose.
 
 ## Why
 
-AI agents already know a lot about the work you are doing. Shellmates turns that into a local-first way for agents to help people meet, collaborate, or keep a focused 1:1 chat without copying private project context into a public app.
+Coding agents already understand a lot about the work their humans are doing. Shellmates turns that context into a local-first way for people to meet, collaborate, or keep a focused 1:1 chat without copying private project context into a public app.
 
-Shellmates is not a generic chat app. It is a context-firewalled agent messenger:
+Shellmates is not an autonomous agent chatroom. It is a context-firewalled human messenger with agent assistance:
 
 - The coding session stays clean.
-- The Shellmates session handles message bodies and coaching.
+- The Shellmates session handles human message bodies and reply coaching.
 - The relay cannot read message contents.
 - Users decide exactly what gets sent.
 
 ## Features
 
-- **Local-first identity and profile**: private state stays under `TL_HOME`; only signed public profile cards are published.
+- **Local-first human profile**: private state stays under `TL_HOME`; only signed public profile cards are published.
 - **Signed agent identity**: `agent_id = fingerprint(sign_pub)` using Ed25519.
 - **End-to-end encrypted messages**: X25519 ECDH, HKDF, AES-256-GCM.
 - **Live Claude Code channel**: inbound messages appear as `<channel source="shellmates-channel" ...>`.
 - **Context firewall**: ordinary coding MCP tools never return message bodies or coaching.
 - **One active 1:1 chat**: simpler safety model; end the current chat before starting another.
-- **Reply coaching**: suggests tone, intent, and question direction instead of writing send-ready replies.
+- **Reply coaching**: helps the person choose tone, intent, and question direction instead of sending messages automatically.
 - **Local or network transport**: shared-folder mode by default; HTTP relay/directory with `TL_SERVER`.
 - **Command and skill affordances**: `/shellmates-*` commands and a `shellmates` skill map user intent to `shellmates_*` MCP tools.
 
@@ -102,7 +102,7 @@ After `npm run install-agent`, Claude Code gets these commands:
 - `/shellmates`: open or focus the isolated Shellmates session
 - `/shellmates-status`: check profile, active chat, unread count, and pending intros
 - `/shellmates-open`: open the current chat and get reply direction
-- `/shellmates-scan`: search match candidates
+- `/shellmates-scan`: search people who may be good matches
 - `/shellmates-intro`: send an intro to a selected candidate
 - `/shellmates-reply`: get reply direction or send exact user-provided text
 - `/shellmates-profile`: check, create, or publish a profile
@@ -134,11 +134,11 @@ npm run cli -- init
 npm run cli -- profile --name Alice --country Korea \
   --langs "Korean,English" \
   --stacks "TypeScript,Rust" \
-  --interests "AI Agents,Developer Tools" \
+  --interests "Developer Tools,Open Source" \
   --modes "builder,friend"
 npm run cli -- publish
 npm run cli -- scan
-npm run cli -- intro <agent_id> "Hi, I saw you are also building agent tools."
+npm run cli -- intro <agent_id> "Hi, I saw you are also building developer tools."
 npm run cli -- inbox
 npm run cli -- accept <intro_id>
 npm run cli -- open
@@ -148,14 +148,14 @@ npm run cli -- reply
 
 Run `npm run cli` with no arguments for the REPL. JSON output redacts message bodies and coaching unless `--include-bodies` is set.
 
-## Local Two-Agent Smoke
+## Local Two-Person Smoke
 
 ```bash
 ROOT="$(mktemp -d)"
 NET="$ROOT/net"
 
 TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- init
-TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- profile --name Alice --country Korea --langs "Korean,English" --stacks "TypeScript" --interests "AI Agents" --modes "builder,friend"
+TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- profile --name Alice --country Korea --langs "Korean,English" --stacks "TypeScript" --interests "Developer Tools" --modes "builder,friend"
 TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- publish
 
 TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- init

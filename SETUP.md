@@ -56,7 +56,7 @@ ROOT="$(mktemp -d)"
 NET="$ROOT/net"
 
 TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- init
-TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- profile --name Alice --country Korea --langs "Korean,English" --stacks "TypeScript" --interests "AI Agents" --modes "builder,friend"
+TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- profile --name Alice --country Korea --langs "Korean,English" --stacks "TypeScript" --interests "Developer Tools" --modes "builder,friend"
 TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- publish
 
 TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- init
@@ -106,5 +106,4 @@ node scripts/e2e-channel.mjs
 - `TL_NET` controls the local shared directory/relay path.
 - `TL_SERVER` switches clients to the HTTP relay/directory server.
 - `SHELLMATES_DIR` changes the isolated Claude Code project directory; default is `~/shellmates`.
-- The Shellmates UI and system text are English. Chat content itself can be in any language the users choose.
-
+- The Shellmates UI and system text are English. Chat content is human-to-human and can be in any language the users choose.

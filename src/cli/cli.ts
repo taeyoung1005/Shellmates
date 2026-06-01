@@ -112,7 +112,7 @@ const HELP = `Shellmates — /shellmates commands
   export-profile [--out path]   Export signed profile card
   import-profile <file>         Import a signed profile card
   invite                        Create invite link
-  scan                          Search match candidates locally
+  scan                          Search people who may be good matches
   intro <agent_id> ["message"]   Send intro when no active chat exists
   cancel                        Cancel pending outbound intro
   poll                          Ingest relay envelopes now (counts only)

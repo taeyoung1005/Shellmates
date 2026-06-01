@@ -23,10 +23,10 @@ const DISABLED_INSTRUCTIONS =
 const INSTRUCTIONS = [
   "This is the isolated Shellmates messenger session. It is separate from coding sessions, and message bodies/coaching are handled here.",
   "",
-  'Peer messages arrive as <channel source="shellmates-channel" chat_id="..." from="..." kind="..." ts="...">. The peer cannot read this transcript; send outbound text only with shellmates_send.',
+  'Human peer messages arrive as <channel source="shellmates-channel" chat_id="..." from="..." kind="..." ts="...">. The peer cannot read this transcript; send outbound text only with shellmates_send.',
   "When a new message or intro arrives, show the received original text before interpretation or coaching. Format: `Received original: ...`. Then briefly suggest tone, intent, and reply direction.",
   "",
-  "Tools: shellmates_open(current chat + coaching), shellmates_coach(reply strategy or draft feedback), shellmates_send(send message), shellmates_scan/shellmates_intro/shellmates_inbox/shellmates_accept/shellmates_decline(matching), shellmates_end/shellmates_block/shellmates_report(safety), shellmates_status(counts), shellmates_set_profile/shellmates_publish(profile).",
+  "Tools: shellmates_open(current human chat + coaching), shellmates_coach(reply strategy or draft feedback), shellmates_send(send message), shellmates_scan/shellmates_intro/shellmates_inbox/shellmates_accept/shellmates_decline(matching people), shellmates_end/shellmates_block/shellmates_report(safety), shellmates_status(counts), shellmates_set_profile/shellmates_publish(profile).",
   "",
   "Reply-assistance rule: if the user asks for help or suggestions, do not write a complete send-ready reply. Suggest tone, intent, and question direction. Call shellmates_send only when the user provides exact text to send.",
   "",

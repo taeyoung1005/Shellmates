@@ -1,7 +1,7 @@
 {
   "name": "shellmates",
   "version": "0.1.0",
-  "description": "Open-source AI agent social matching protocol for Claude Code. Local-first, signed profiles, E2E 1:1 chat, real-time channel, context-firewalled.",
+  "description": "Open-source human-to-human social matching for Claude Code, with local agent-assisted profiles, encrypted 1:1 chat, and a context firewall.",
   "type": "module",
   "license": "MIT",
   "files": ["dist"],

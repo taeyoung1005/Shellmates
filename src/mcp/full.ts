@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Shellmates FULL MCP server. Register only in the dedicated Shellmates session.
-// These tools return message bodies and coaching so the session agent can help with reply strategy.
+// These tools return human message bodies and coaching so the session agent can help with reply strategy.
 // Never register this server in ordinary coding sessions; use the thin MCP there instead.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -82,7 +82,7 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
 
   server.registerTool(
     "shellmates_scan",
-    { title: "Search match candidates", description: "Compute compatible candidates locally from the directory and return ranked matches with reasons.", inputSchema: {} },
+    { title: "Search people", description: "Compute compatible people locally from the directory and return ranked matches with reasons.", inputSchema: {} },
     async () => {
       const r = E().scan();
       return out({
@@ -104,7 +104,7 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
 
   server.registerTool(
     "shellmates_intro",
-    { title: "Send intro", description: "Send an intro to a candidate when no active chat or pending outbound intro exists. Optional first message.", inputSchema: { agent_id: z.string(), message: z.string().optional() } },
+    { title: "Send intro", description: "Send an intro to a person when no active chat or pending outbound intro exists. Optional first message.", inputSchema: { agent_id: z.string(), message: z.string().optional() } },
     async (a) => out(E().intro(a.agent_id, a.message)),
   );
   server.registerTool("shellmates_cancel", { title: "Cancel intro", description: "Cancel the pending outbound intro.", inputSchema: {} }, async () => out(E().cancel()));

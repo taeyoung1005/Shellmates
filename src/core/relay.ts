@@ -1,5 +1,5 @@
-// Relay — 암호화 봉투 전달. 공유 폴더(net/relay/<수신 agent_id>/<env_id>.json).
-// relay는 from/to/timestamp/size만 볼 수 있고 본문(body)은 암호문이라 못 본다.
+// Internal implementation note.
+// Internal implementation note.
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Ctx } from "./config.js";
@@ -12,7 +12,7 @@ function inboxDir(ctx: Ctx, agentId: string): string {
   return join(ctx.relayDir, agentId);
 }
 
-/** 봉투를 수신자 inbox에 투입. to/id 형식을 검증해 경로 traversal을 차단. */
+/** Internal implementation note. */
 export function sendEnvelope(ctx: Ctx, env: Envelope): void {
   if (!isAgentId(env.to)) throw new Error(`invalid recipient agent_id: ${env.to}`);
   if (!isPrefixedId(env.id, "env")) throw new Error(`invalid envelope id: ${env.id}`);
@@ -26,7 +26,7 @@ export interface PolledEnvelope {
   path: string;
 }
 
-/** 내 inbox의 봉투들을 읽어온다(삭제는 호출자가 처리 후 deleteEnvelope). */
+/** Internal implementation note. */
 export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
   const dir = inboxDir(ctx, myAgentId);
   if (!existsSync(dir)) return [];
@@ -38,7 +38,7 @@ export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
       const env = JSON.parse(readFileSync(path, "utf8")) as Envelope;
       out.push({ env, path });
     } catch {
-      // 손상 봉투는 제거
+      // Internal implementation note.
       try {
         rmSync(path);
       } catch {
@@ -46,7 +46,7 @@ export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
       }
     }
   }
-  // 도착 순서 비슷하게: created_at 기준 정렬
+  // Internal implementation note.
   out.sort((a, b) => a.env.created_at.localeCompare(b.env.created_at));
   return out;
 }

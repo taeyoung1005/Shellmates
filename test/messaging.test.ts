@@ -80,7 +80,7 @@ test("security: forged-signature message is rejected", () => {
   const bIdent = identOf(p.bHome, p.net);
   p.b.reload();
   const before = p.b.state.active_chat!.messages.length;
-  // from=Alice 인 척, 서명은 공격자 키
+  // Internal implementation note.
   const forged = msgEnvelope(aId, bId, conv, "evil", bIdent.box_pub, attacker);
   sendEnvelope(ctxFor(p.bHome, p.net), forged);
   const ing = p.b.poll();
@@ -98,7 +98,7 @@ test("security: replay of same envelope is deduped", () => {
   const ctx = ctxFor(p.bHome, p.net);
   sendEnvelope(ctx, env);
   assert.equal(p.b.poll().ingested, 1);
-  sendEnvelope(ctx, env); // 동일 봉투 재전송
+  sendEnvelope(ctx, env);
   assert.equal(p.b.poll().ingested, 0);
 });
 
@@ -130,7 +130,7 @@ test("end → unmatch + no_resuggest excludes partner from scan", () => {
   const p = pair();
   const { bId } = bringToChat(p, "hi");
   assert.ok(p.a.end().ok);
-  // Bob도 종료 통지 수신
+  // Internal implementation note.
   assert.equal(p.b.open().chat, null);
   const matches = p.a.scan().matches;
   assert.ok(!matches.some((m) => m.card.owner === bId));
@@ -148,7 +148,7 @@ test("decline removes intro and notifies introducer", () => {
   const intro = p.b.inbox().intros[0]!;
   assert.ok(p.b.decline(intro.intro_id).ok);
   assert.equal(p.b.inbox().intros.length, 0);
-  // a가 decline 통지 수신 → outbox 비워지고 다시 intro 가능
+  // Internal implementation note.
   p.a.poll();
   assert.ok(p.a.intro(bId, "again").ok);
   void aId;

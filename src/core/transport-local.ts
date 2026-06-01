@@ -1,5 +1,5 @@
-// LocalFsTransport — 공유 폴더(net/directory, net/relay) 기반. 기존 directory.ts/relay.ts에 위임.
-// 행동은 Phase 1과 100% 동일(기존 37 테스트 유지). 같은 머신/공유 폴더에서만 통신 가능.
+// Internal implementation note.
+// Internal implementation note.
 import type { Ctx } from "./config.js";
 import { lookupCard, publishCard, revokeCard, scanCards } from "./directory.js";
 import { deleteEnvelope, pollEnvelopes, sendEnvelope } from "./relay.js";
@@ -18,7 +18,7 @@ export class LocalFsTransport implements Transport {
   }
 
   scanCards(now: Date = new Date(), _query?: DirectoryQuery): PublicProfileCard[] {
-    void _query; // 로컬 모드는 전체 스캔 후 로컬 매칭. coarse 필터 불필요.
+    void _query;
     return scanCards(this.ctx, now);
   }
 
@@ -31,7 +31,7 @@ export class LocalFsTransport implements Transport {
   }
 
   pollEnvelopes(myAgentId: string): PolledEnvelope[] {
-    // 로컬 ref = 파일 경로
+    // Internal implementation note.
     return pollEnvelopes(this.ctx, myAgentId).map(({ env, path }) => ({ env, ref: path }));
   }
 

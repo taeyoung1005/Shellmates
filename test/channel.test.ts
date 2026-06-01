@@ -183,7 +183,7 @@ test("channel: incoming message on relay → notifications/claude/channel with b
     assert.equal(c.params.meta.from, aId);
     assert.equal(c.params.meta.flagged, "false");
     assert.ok(typeof c.params.meta.chat_id === "string" && (c.params.meta.chat_id as string).length > 0);
-    // 한 번 더 폴링하면 새 봉투 없음(중복 push 없음, durable ingest)
+    // Internal implementation note.
     const again = await channelTick(server, bob);
     assert.equal(again, 0, "no duplicate push on re-poll");
   } finally {
@@ -287,11 +287,11 @@ test("firewall: pollAndIngest without collector ingests but collects nothing (da
   bringToChat(p, "hi");
   assert.ok(p.a.send("body must not leak via daemon path").ok);
   const bob = engineFor(p.bHome, p.net);
-  // 데몬 경로: poll()은 카운트/이벤트만 (collector 없음)
+  // Internal implementation note.
   const r = bob.poll();
   assert.equal(r.ingested, 1);
   assert.ok(r.events.some((e) => e.startsWith("message:")));
-  // 본문은 events에 없음(카운트/이벤트 식별자만)
+  // Internal implementation note.
   assert.ok(!r.events.join(" ").includes("body must not leak"));
 });
 

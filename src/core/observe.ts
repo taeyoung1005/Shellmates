@@ -1,15 +1,15 @@
-// Phase 2F — "제품의 혼": 로컬 코딩 에이전트 기록을 관찰해 성향 프로필 초안을 만든다.
-//  - 데이터는 전부 로컬에서만 처리(프라이버시). 결과는 "초안"일 뿐, 사용자가 publish해야 공개.
-//  - LLM(TL_LLM) 가능 시 요약, 아니면 결정적 휴리스틱(키워드 빈도)으로 폴백 → 외부 의존 없이도 동작.
-//  - 컨텍스트 방화벽: 이 작업은 별도 `tl` 세션에서 사용자의 "자기 데이터"로 프로필을 만드는 것이며,
-//    코딩 세션으로 소개팅 데이터를 주입하는 것과 무관하다(방향이 반대, 안전).
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultLlm, extractJson, type LlmFn } from "./llm.js";
 import type { MatchingMode, ProfileAnswers } from "./types.js";
 
-// 기술 스택 어휘(표기 보존). 대소문자 무시 매칭.
+// Internal implementation note.
 const STACK_VOCAB = [
   "TypeScript", "JavaScript", "Python", "Rust", "Go", "Java", "Kotlin", "Swift", "Ruby", "C++", "C#",
   "React", "Next.js", "Vue", "Svelte", "Angular", "Node", "Deno", "Bun",
@@ -19,20 +19,20 @@ const STACK_VOCAB = [
   "Tailwind", "WebAssembly", "Electron",
 ];
 
-// 관심사 어휘 → 표준 표기. 여러 동의어를 한 관심사로 묶는다.
+// Internal implementation note.
 const INTEREST_VOCAB: { label: string; terms: string[] }[] = [
-  { label: "AI Products", terms: ["ai product", "llm", "gpt", "claude", "agent", "rag", "prompt", "에이전트", "인공지능"] },
+  { label: "AI Products", terms: ["ai product", "llm", "gpt", "claude", "agent", "rag", "prompt", "agent", "artificial intelligence"] },
   { label: "AI Agents", terms: ["agentic", "mcp", "tool use", "autonomous agent", "subagent"] },
-  { label: "Startups", terms: ["startup", "founder", "mvp", "fundrais", "saas", "스타트업", "창업"] },
-  { label: "Side Projects", terms: ["side project", "weekend project", "hobby", "사이드"] },
-  { label: "Design", terms: ["design system", "figma", "ux", "ui ", "css", "tailwind", "디자인"] },
-  { label: "Open Source", terms: ["open source", "github", "oss", "npm publish", "오픈소스"] },
-  { label: "Security", terms: ["security", "crypto", "encryption", "auth", "보안", "암호"] },
+  { label: "Startups", terms: ["startup", "founder", "mvp", "fundrais", "saas", "startup", "founding"] },
+  { label: "Side Projects", terms: ["side project", "weekend project", "hobby", "side project"] },
+  { label: "Design", terms: ["design system", "figma", "ux", "ui ", "css", "tailwind", "design"] },
+  { label: "Open Source", terms: ["open source", "github", "oss", "npm publish", "open source"] },
+  { label: "Security", terms: ["security", "crypto", "encryption", "auth", "security", "cryptography"] },
   { label: "DevOps", terms: ["devops", "ci/cd", "kubernetes", "docker", "deploy", "infra"] },
-  { label: "Data", terms: ["data pipeline", "etl", "analytics", "ml ", "dataset", "데이터"] },
+  { label: "Data", terms: ["data pipeline", "etl", "analytics", "ml ", "dataset", "data"] },
 ];
 
-const HANGUL = /[가-힣]/;
+const HANGUL = /\p{Script=Hangul}/u;
 const HIRAGANA_KATAKANA = /[぀-ヿ]/;
 const HAN = /[一-鿿]/;
 
@@ -45,13 +45,13 @@ export interface ObserveResult {
 }
 
 export interface ObserveOptions {
-  roots?: string[]; // 기본: ~/.claude/projects, ~/.codex
-  llm?: LlmFn; // 주입(테스트). 기본 defaultLlm()
-  maxChars?: number; // 코퍼스 상한
-  maxFiles?: number; // 스캔 파일 상한
+  roots?: string[];
+  llm?: LlmFn;
+  maxChars?: number;
+  maxFiles?: number;
 }
 
-/** jsonl 한 줄 객체에서 (role, text) 추출. 다양한 transcript 스키마에 방어적으로 대응. */
+/** Internal implementation note. */
 function extractLineTexts(obj: unknown): { role: string; text: string }[] {
   if (!obj || typeof obj !== "object") return [];
   const o = obj as Record<string, unknown>;
@@ -76,7 +76,7 @@ function extractLineTexts(obj: unknown): { role: string; text: string }[] {
   return out;
 }
 
-/** 파일을 최대 maxBytes까지만 읽는다(거대 transcript를 통째로 메모리에 올리지 않도록). */
+/** Internal implementation note. */
 function readBoundedUtf8(path: string, size: number, maxBytes: number): string {
   if (size <= maxBytes) return readFileSync(path, "utf8");
   const fd = openSync(path, "r");
@@ -89,7 +89,7 @@ function readBoundedUtf8(path: string, size: number, maxBytes: number): string {
   }
 }
 
-/** roots 아래 *.jsonl 파일을 최근 수정순으로 모아 user/assistant 텍스트 코퍼스를 만든다. */
+/** Internal implementation note. */
 function collectCorpus(roots: string[], maxFiles: number, maxChars: number): { corpus: string; userText: string; scannedFiles: number } {
   const files: { path: string; mtime: number; size: number }[] = [];
   const walk = (dir: string, depth: number): void => {
@@ -115,7 +115,7 @@ function collectCorpus(roots: string[], maxFiles: number, maxChars: number): { c
   for (const r of roots) if (existsSync(r)) walk(r, 0);
   files.sort((a, b) => b.mtime - a.mtime);
 
-  // 파일당 읽기 상한(거대 세션 로그가 통째로 로드되어 OOM 나는 것 방지). maxChars의 4배까지만.
+  // Internal implementation note.
   const perFileCap = Math.max(64 * 1024, maxChars * 4);
   const parts: string[] = [];
   const userParts: string[] = [];
@@ -176,11 +176,11 @@ function countOccurrences(haystack: string, needle: string): number {
   return count;
 }
 
-/** 결정적 휴리스틱: 키워드 빈도로 stacks/interests/languages/style 추정. */
+/** Internal implementation note. */
 function heuristicDraft(corpus: string, userText: string): ProfileAnswers {
   const lc = corpus.toLowerCase();
 
-  // 어휘 중복 방어 + 표기 dedupe
+  // Internal implementation note.
   const uniqStacks = [...new Set(STACK_VOCAB)];
   const stacks = [...new Set(topMatches(uniqStacks, (s) => countOccurrences(lc, s.toLowerCase()), 6))];
   const interests = topMatches(
@@ -196,7 +196,7 @@ function heuristicDraft(corpus: string, userText: string): ProfileAnswers {
   if (/[a-z]{4,}/i.test(corpus)) languages.push("English");
   if (languages.length === 0) languages.push("English");
 
-  // 대화 스타일: 질문 비율 + 평균 길이로 거칠게 추정
+  // Internal implementation note.
   const userLines = userText.split("\n").filter(Boolean);
   const avgLen = userLines.length ? userLines.reduce((a, l) => a + l.length, 0) / userLines.length : 0;
   const questionRatio = userLines.length ? userLines.filter((l) => l.includes("?") || /[?？]/.test(l)).length / userLines.length : 0;
@@ -247,7 +247,7 @@ function llmDraft(corpus: string, llm: LlmFn): ProfileAnswers | null {
   return draft;
 }
 
-/** 로컬 기록을 관찰해 프로필 초안 생성. LLM 가능 시 요약, 아니면 휴리스틱. */
+/** Internal implementation note. */
 export function observeProfile(opts: ObserveOptions = {}): ObserveResult {
   const roots = opts.roots ?? [join(homedir(), ".claude", "projects"), join(homedir(), ".codex")];
   const maxFiles = opts.maxFiles ?? 200;
@@ -260,20 +260,20 @@ export function observeProfile(opts: ObserveOptions = {}): ObserveResult {
       source: "heuristic",
       scannedFiles,
       chars: 0,
-      note: "관찰할 로컬 기록을 찾지 못했습니다. 플래그로 직접 프로필을 채우세요.",
+      note: "No local agent history found. Fill the profile manually with flags.",
     };
   }
 
   const llm = opts.llm ?? defaultLlm();
   const viaLlm = llmDraft(corpus, llm);
   if (viaLlm) {
-    return { draft: viaLlm, source: "llm", scannedFiles, chars: corpus.length, note: "LLM 요약 기반 초안(검토 후 publish)." };
+    return { draft: viaLlm, source: "llm", scannedFiles, chars: corpus.length, note: "LLM-generated draft; review before publishing." };
   }
   return {
     draft: heuristicDraft(corpus, userText),
     source: "heuristic",
     scannedFiles,
     chars: corpus.length,
-    note: "휴리스틱(키워드 빈도) 기반 초안. TL_LLM 설정 시 LLM 요약 사용. 검토 후 publish.",
+    note: "Heuristic draft based on keyword frequency. Set TL_LLM to use an LLM summary. Review before publishing.",
   };
 }

@@ -14,7 +14,7 @@ test("MCP exposes ONLY context-safe tools (firewall) and status returns counts o
   const prevNet = process.env.TL_NET;
   process.env.TL_HOME = home;
   process.env.TL_NET = net;
-  engineFor(home, net).init(); // 상태 존재하게
+  engineFor(home, net).init();
 
   try {
     const server = buildServer();
@@ -25,7 +25,7 @@ test("MCP exposes ONLY context-safe tools (firewall) and status returns counts o
 
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();
-    // 정확히 두 개의 컨텍스트-세이프 도구만 존재해야 함 (본문/대화/코칭 도구 없음)
+    // Internal implementation note.
     assert.deepEqual(names, ["shellmates_open_session", "shellmates_status"]);
 
     const res = (await client.callTool({ name: "shellmates_status", arguments: {} })) as {
@@ -33,8 +33,8 @@ test("MCP exposes ONLY context-safe tools (firewall) and status returns counts o
     };
     const text = res.content.map((c) => c.text).join("\n");
     assert.match(text, /unread=/);
-    // 본문/코칭 같은 표현이 들어가면 안 됨
-    assert.ok(!/suggested|메시지 본문|coach/i.test(text));
+    // Internal implementation note.
+    assert.ok(!/suggested|message body|coach/i.test(text));
 
     await client.close();
   } finally {

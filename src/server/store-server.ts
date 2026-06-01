@@ -1,7 +1,7 @@
-// 서버 파일 백엔드 — zero-dep. relay 봉투 큐 + directory 카드 저장.
-//  - serverData/directory/<agentId>.json   (서명 카드, 클라가 최종 재검증)
-//  - serverData/relay/<agentId>/<envId>.json (암호 봉투; 서버는 메타데이터만, 본문 복호화 X)
-// 경로 안전: 모든 agentId/envId는 isAgentId/isPrefixedId로 검증 후 경로 조립(traversal 차단).
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -10,26 +10,61 @@ import { isAgentId, isPrefixedId } from "../core/util.js";
 
 export interface ServerStoreConfig {
   root: string;
-  envelopeTtlMs: number; // 봉투 만료(기본 7일)
-  inboxMax: number; // inbox 큐 최대 길이(기본 1000)
+  envelopeTtlMs: number;
+  inboxMax: number;
+}
+
+export interface ServerPublicStats {
+  updated_at: string;
+  users_attempted_total: number;
+  users_by_country: { country_code: string; users: number }[];
+  active_conversations: number;
+  active_chat_users: number;
+  storage: { cards: number; inboxes: number; envelopes: number };
+}
+
+interface AnalyticsFile {
+  agents: Record<string, { country_code: string; first_seen_at: string; last_seen_at: string }>;
+  conversations: Record<string, { participants: [string, string]; started_at: string; last_seen_at: string }>;
 }
 
 function atomicWrite(path: string, data: string): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
   writeFileSync(tmp, data, "utf8");
-  renameSync(tmp, path); // rename은 원자적(동일 파일시스템)
+  renameSync(tmp, path);
 }
 
 export class ServerStore {
   readonly directoryDir: string;
   readonly relayDir: string;
+  readonly analyticsPath: string;
+  private analytics: AnalyticsFile;
 
   constructor(private readonly cfg: ServerStoreConfig) {
     this.directoryDir = join(cfg.root, "directory");
     this.relayDir = join(cfg.root, "relay");
+    this.analyticsPath = join(cfg.root, "analytics.json");
     mkdirSync(this.directoryDir, { recursive: true });
     mkdirSync(this.relayDir, { recursive: true });
+    this.analytics = this.loadAnalytics();
+  }
+
+  private loadAnalytics(): AnalyticsFile {
+    if (!existsSync(this.analyticsPath)) return { agents: {}, conversations: {} };
+    try {
+      const parsed = JSON.parse(readFileSync(this.analyticsPath, "utf8")) as Partial<AnalyticsFile>;
+      return {
+        agents: parsed.agents && typeof parsed.agents === "object" ? parsed.agents : {},
+        conversations: parsed.conversations && typeof parsed.conversations === "object" ? parsed.conversations : {},
+      };
+    } catch {
+      return { agents: {}, conversations: {} };
+    }
+  }
+
+  private saveAnalytics(): void {
+    atomicWrite(this.analyticsPath, JSON.stringify(this.analytics, null, 2));
   }
 
   // ── directory ───────────────────────────────────────────────────────
@@ -60,9 +95,9 @@ export class ServerStore {
   }
 
   /**
-   * 카드 목록(coarse 필터 + limit + cursor 페이지네이션). 만료 카드는 제외. 매칭 점수는 클라가 로컬 계산.
-   * cursor는 정렬된 파일 목록에 대한 offset(문자열). nextCursor가 null이면 끝.
-   * 페이지는 "스캔한 파일 수" 기준(필터로 적게 반환될 수 있음) → 클라가 nextCursor까지 루프하면 전체를 본다.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
    */
   listCards(
     opts: { limit?: number; mode?: string; country?: string; cursor?: string } = {},
@@ -77,12 +112,12 @@ export class ServerStore {
     for (const f of slice) {
       try {
         const card = JSON.parse(readFileSync(join(this.directoryDir, f), "utf8")) as ProfileCard;
-        if (card.expires_at && Date.parse(card.expires_at) <= now.getTime()) continue; // 만료 제외
+        if (card.expires_at && Date.parse(card.expires_at) <= now.getTime()) continue;
         if (opts.mode && !(card.matching_modes ?? []).includes(opts.mode as never)) continue;
         if (opts.country && card.country?.toLowerCase() !== opts.country.toLowerCase()) continue;
         out.push(card);
       } catch {
-        /* 손상 카드 무시 */
+        /* Internal implementation note. */
       }
     }
     const consumed = offset + slice.length;
@@ -102,15 +137,15 @@ export class ServerStore {
   }
 
   /**
-   * 봉투를 수신자 inbox에 큐잉. inbox가 가득 차면 false(서버가 429 응답).
-   * 같은 id 재전송은 멱등(덮어씀) → 클라 dedupe와 결합해 중복 안전.
+   * Internal implementation note.
+   * Internal implementation note.
    */
   putEnvelope(env: Envelope): boolean {
     const dir = this.inboxDir(env.to);
     mkdirSync(dir, { recursive: true });
     const path = this.envPath(env.to, env.id);
     const exists = existsSync(path);
-    if (!exists && this.inboxCount(env.to) >= this.cfg.inboxMax) return false; // 가득 참(기존 봉투 보호)
+    if (!exists && this.inboxCount(env.to) >= this.cfg.inboxMax) return false;
     atomicWrite(path, JSON.stringify(env));
     return true;
   }
@@ -121,7 +156,7 @@ export class ServerStore {
     return readdirSync(dir).filter((f) => f.endsWith(".json")).length;
   }
 
-  /** 내 inbox 봉투 목록. 만료(TTL) 봉투는 제외하고 반환(GET은 삭제 안 함 — ACK 모델). */
+  /** Internal implementation note. */
   listEnvelopes(agentId: string, now: Date = new Date()): Envelope[] {
     const dir = this.inboxDir(agentId);
     if (!existsSync(dir)) return [];
@@ -132,7 +167,7 @@ export class ServerStore {
       try {
         const st = statSync(p);
         if (now.getTime() - st.mtimeMs > this.cfg.envelopeTtlMs) {
-          rmSync(p); // 만료 GC
+          rmSync(p);
           continue;
         }
         const env = JSON.parse(readFileSync(p, "utf8")) as Envelope;
@@ -145,18 +180,83 @@ export class ServerStore {
         }
       }
     }
-    out.sort((a, b) => a.mtime - b.mtime); // 도착 순서
+    out.sort((a, b) => a.mtime - b.mtime);
     return out.map((x) => x.env);
   }
 
-  /** 봉투 ack 삭제(소유자 인증 후 서버가 호출). */
+  /** Internal implementation note. */
   deleteEnvelope(agentId: string, envId: string): void {
     if (!isAgentId(agentId) || !isPrefixedId(envId, "env")) return;
     const p = this.envPath(agentId, envId);
     if (existsSync(p)) rmSync(p);
   }
 
-  // ── GC / 메트릭 ──────────────────────────────────────────────────────
+  // Internal implementation note.
+  observeAgent(agentId: string, countryCode: string, now: Date = new Date()): void {
+    if (!isAgentId(agentId)) return;
+    const ts = now.toISOString();
+    const cc = /^[A-Z]{2}$/.test(countryCode) ? countryCode : "ZZ";
+    const prev = this.analytics.agents[agentId];
+    this.analytics.agents[agentId] = {
+      country_code: cc,
+      first_seen_at: prev?.first_seen_at ?? ts,
+      last_seen_at: ts,
+    };
+    this.saveAnalytics();
+  }
+
+  observeEnvelope(env: Envelope, senderCountryCode: string, now: Date = new Date()): void {
+    this.observeAgent(env.from, senderCountryCode, now);
+    const ts = now.toISOString();
+    if (env.type === "intro_accept" || env.type === "message") {
+      this.analytics.conversations[env.conversation_id] = {
+        participants: [env.from, env.to],
+        started_at: this.analytics.conversations[env.conversation_id]?.started_at ?? ts,
+        last_seen_at: ts,
+      };
+      this.saveAnalytics();
+      return;
+    }
+    if (env.type === "end" || env.type === "intro_decline") {
+      delete this.analytics.conversations[env.conversation_id];
+      this.saveAnalytics();
+    }
+  }
+
+  publicStats(activeConversationTtlMs: number, now: Date = new Date()): ServerPublicStats {
+    const nowMs = now.getTime();
+    let changed = false;
+    for (const [id, conv] of Object.entries(this.analytics.conversations)) {
+      if (nowMs - Date.parse(conv.last_seen_at) > activeConversationTtlMs) {
+        delete this.analytics.conversations[id];
+        changed = true;
+      }
+    }
+    if (changed) this.saveAnalytics();
+
+    const countries = new Map<string, number>();
+    for (const agent of Object.values(this.analytics.agents)) {
+      countries.set(agent.country_code, (countries.get(agent.country_code) ?? 0) + 1);
+    }
+    const activeUsers = new Set<string>();
+    for (const conv of Object.values(this.analytics.conversations)) {
+      activeUsers.add(conv.participants[0]);
+      activeUsers.add(conv.participants[1]);
+    }
+    const storage = this.stats();
+    return {
+      updated_at: now.toISOString(),
+      users_attempted_total: Object.keys(this.analytics.agents).length,
+      users_by_country: [...countries.entries()]
+        .map(([country_code, users]) => ({ country_code, users }))
+        .sort((a, b) => b.users - a.users || a.country_code.localeCompare(b.country_code)),
+      active_conversations: Object.keys(this.analytics.conversations).length,
+      active_chat_users: activeUsers.size,
+      storage,
+    };
+  }
+
+  // Internal implementation note.
   gc(now: Date = new Date()): { cardsRemoved: number; envelopesRemoved: number } {
     let cardsRemoved = 0;
     let envelopesRemoved = 0;

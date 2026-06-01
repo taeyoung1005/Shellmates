@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Shellmates relay/directory 레퍼런스 서버 — Node 내장 http, zero-dep.
+// Internal implementation note.
 //
-// 보안 2계층(PLAN §3.4):
-//  - Layer 1 admission(누가 접속 가능한가): X-TL-Access 공유 토큰 + (선택) agent_id allowlist.
-//    TL_RELAY_OPEN=true 면 해제(오픈소스 공개 시). 내부 테스트 기간엔 토큰으로 잠금.
-//  - Layer 2 identity/integrity/privacy(항상 ON): TL-Sig 서명 인증(소유자만 inbox 읽기/삭제),
-//    카드 서명 검증, 봉투 형식/크기/to일치/rate 검증. 본문(ciphertext)은 절대 복호화/열람하지 않음.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,17 +22,19 @@ export interface ServerConfig {
   host: string;
   port: number;
   dataRoot: string;
-  open: boolean; // admission 해제
+  open: boolean;
   accessToken: string | null; // X-TL-Access
-  allowlist: Set<string> | null; // 허용 agent_id (null = 제한 없음)
+  allowlist: Set<string> | null;
   maxEnvelopeBytes: number;
   maxCardBytes: number;
   inboxMax: number;
   envelopeTtlMs: number;
-  rateMax: number; // 윈도당 전체 요청 한도(IP)
-  rateRelayPostMax: number; // 윈도당 POST /relay 한도(IP) — intro/메시지 스팸 방어
+  rateMax: number;
+  rateRelayPostMax: number;
   rateWindowMs: number;
-  trustProxy: boolean; // X-Forwarded-For 신뢰 여부(리버스 프록시 뒤일 때만 true)
+  trustProxy: boolean;
+  ipCountryMap: Map<string, string>;
+  activeConversationTtlMs: number;
 }
 
 function envInt(name: string, def: number): number {
@@ -40,6 +42,22 @@ function envInt(name: string, def: number): number {
   if (v === undefined) return def;
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
+}
+
+function parseIpCountryMap(raw: string | undefined): Map<string, string> {
+  if (!raw) return new Map();
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const out = new Map<string, string>();
+    for (const [ipOrPrefix, country] of Object.entries(parsed)) {
+      if (typeof country !== "string") continue;
+      const code = country.trim().toUpperCase();
+      if (/^[A-Z]{2}$/.test(code)) out.set(ipOrPrefix.trim(), code);
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
 }
 
 export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -50,7 +68,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
       const arr = JSON.parse(readFileSync(allowPath, "utf8")) as string[];
       allowlist = new Set(arr.filter((x) => isAgentId(x)));
     } catch {
-      allowlist = new Set(); // 파싱 실패 시 안전하게 전부 차단
+      allowlist = new Set();
     }
   }
   return {
@@ -68,10 +86,12 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
     rateRelayPostMax: envInt("TL_RATE_RELAY_POST_MAX", 300),
     rateWindowMs: envInt("TL_RATE_WINDOW_MS", 60 * 1000),
     trustProxy: env.TL_TRUST_PROXY === "true",
+    ipCountryMap: parseIpCountryMap(env.TL_IP_COUNTRY_MAP),
+    activeConversationTtlMs: envInt("TL_ACTIVE_CHAT_TTL_MS", 24 * 60 * 60 * 1000),
   };
 }
 
-// ── 단순 고정 윈도 rate limiter ─────────────────────────────────────────
+// Internal implementation note.
 class RateLimiter {
   private hits = new Map<string, { count: number; windowStart: number }>();
   constructor(private windowMs: number) {}
@@ -111,7 +131,7 @@ interface Metrics {
 export function createApp(cfg: ServerConfig): { server: Server; store: ServerStore; metrics: Metrics; timers: NodeJS.Timeout[] } {
   const store = new ServerStore({ root: cfg.dataRoot, envelopeTtlMs: cfg.envelopeTtlMs, inboxMax: cfg.inboxMax });
   const rate = new RateLimiter(cfg.rateWindowMs);
-  const seenNonces = new Map<string, number>(); // nonce → 만료 ms
+  const seenNonces = new Map<string, number>();
   const metrics: Metrics = {
     started_at: new Date().toISOString(),
     requests: 0,
@@ -130,9 +150,9 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     res.end(data);
   };
 
-  // rate limit 키. 기본은 소켓 IP(스푸핑 불가). TL_TRUST_PROXY=true(리버스 프록시 뒤)일 때만
-  // X-Forwarded-For의 **rightmost**(우리 프록시가 추가한 신뢰 가능한 hop)를 사용한다.
-  // leftmost는 클라이언트가 임의로 넣을 수 있어 신뢰하면 rate limit이 무력화된다.
+  // Internal implementation note.
+  // Internal implementation note.
+  // Internal implementation note.
   const clientIp = (req: IncomingMessage): string => {
     if (cfg.trustProxy) {
       const xff = req.headers["x-forwarded-for"]?.toString();
@@ -145,9 +165,27 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     return req.socket.remoteAddress || "unknown";
   };
 
-  // 본문을 읽되 maxBytes 초과 시 null 반환(413). 초과해도 소켓을 즉시 destroy하지 않고
-  // 남은 데이터를 drain한 뒤 'end'에서 응답한다 → 클라가 413 응답을 정상 수신(RST 방지).
-  // 단 hardCap(=maxBytes*4) 초과는 진짜 어뷰즈로 보고 연결을 끊는다.
+  const normalizeIp = (ip: string): string => ip.replace(/^::ffff:/, "");
+
+  const countryFromRequest = (req: IncomingMessage, ip: string): string => {
+    // Internal implementation note.
+    for (const h of ["cf-ipcountry", "x-vercel-ip-country", "fly-client-ip-country", "x-country-code"]) {
+      const raw = req.headers[h]?.toString().trim().toUpperCase();
+      if (raw && /^[A-Z]{2}$/.test(raw)) return raw;
+    }
+    const normalized = normalizeIp(ip);
+    const exact = cfg.ipCountryMap.get(normalized) ?? cfg.ipCountryMap.get(ip);
+    if (exact) return exact;
+    for (const [prefix, code] of cfg.ipCountryMap) {
+      if (prefix.endsWith("*") && normalized.startsWith(prefix.slice(0, -1))) return code;
+      if (prefix.endsWith(".") && normalized.startsWith(prefix)) return code;
+    }
+    return "ZZ";
+  };
+
+  // Internal implementation note.
+  // Internal implementation note.
+  // Internal implementation note.
   const readBody = (req: IncomingMessage, maxBytes: number): Promise<string | null> =>
     new Promise((resolveBody) => {
       let size = 0;
@@ -164,7 +202,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
         size += c.length;
         if (size > maxBytes) {
           over = true;
-          chunks.length = 0; // 메모리 확보(본문 폐기)
+          chunks.length = 0;
           if (size > hardCap) {
             finish(null);
             req.destroy();
@@ -177,7 +215,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
       req.on("error", () => finish(null));
     });
 
-  // 서명 인증 + 소유자 일치 + nonce replay 검사. 통과 시 true, 실패 시 응답 전송 후 false.
+  // Internal implementation note.
   const requireOwner = (req: IncomingMessage, res: ServerResponse, method: string, path: string, agentId: string): boolean => {
     const auth = verifyAuth(req.headers["authorization"]?.toString(), method, path);
     if (!auth.ok || auth.agentId !== agentId) {
@@ -203,13 +241,18 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     const path = url.pathname;
     const now = Date.now();
 
-    // /health 는 admission/rate 제외(헬스체크/로드밸런서용)
+    // Internal implementation note.
     if (method === "GET" && path === "/health") {
       send(res, 200, { ok: true, service: "shellmates-relay", version: SERVER_VERSION, open: cfg.open });
       return;
     }
 
-    // Layer 1: admission(공유 토큰)
+    if (method === "GET" && path === "/public-stats") {
+      send(res, 200, store.publicStats(cfg.activeConversationTtlMs, new Date(now)));
+      return;
+    }
+
+    // Internal implementation note.
     if (!cfg.open && cfg.accessToken) {
       const token = req.headers["x-tl-access"]?.toString();
       if (token !== cfg.accessToken) {
@@ -221,6 +264,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
 
     // rate limit(IP)
     const ip = clientIp(req);
+    const countryCode = countryFromRequest(req, ip);
     if (!rate.check(`ip:${ip}`, cfg.rateMax, now)) {
       metrics.rejected_rate++;
       send(res, 429, { error: "rate_limited" });
@@ -230,7 +274,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     try {
       // ── /metrics ──
       if (method === "GET" && path === "/metrics") {
-        send(res, 200, { ...metrics, stats: store.stats() });
+        send(res, 200, { ...metrics, stats: store.stats(), public_stats: store.publicStats(cfg.activeConversationTtlMs, new Date(now)) });
         return;
       }
 
@@ -279,7 +323,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             send(res, 400, { error: "owner_path_mismatch" });
             return;
           }
-          // 서버도 카드 서명/바인딩/만료 검증(verifyCard는 순수 crypto — 본문 열람 아님)
+          // Internal implementation note.
           const v = verifyCard(card);
           if (!v.ok) {
             metrics.rejected_validation++;
@@ -292,12 +336,14 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             return;
           }
           store.putCard(card);
+          store.observeAgent(agentId, countryCode, new Date(now));
           metrics.cards_published++;
           send(res, 200, { ok: true });
           return;
         }
         if (method === "DELETE") {
           if (!requireOwner(req, res, "DELETE", path, agentId)) return;
+          store.observeAgent(agentId, countryCode, new Date(now));
           store.deleteCard(agentId);
           send(res, 200, { ok: true });
           return;
@@ -328,7 +374,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             send(res, 400, { error: "bad_json" });
             return;
           }
-          // 형식/to일치 검증(서명 검증은 클라가 최종 수행 — 서버는 본문/신원 보증 X)
+          // Internal implementation note.
           if (env.to !== agentId || !isAgentId(env.from) || !isPrefixedId(env.id, "env") || !env.type) {
             metrics.rejected_validation++;
             send(res, 400, { error: "invalid_envelope" });
@@ -344,12 +390,14 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             send(res, 429, { error: "inbox_full" });
             return;
           }
+          store.observeEnvelope(env, countryCode, new Date(now));
           metrics.envelopes_in++;
           send(res, 200, { ok: true, id: env.id });
           return;
         }
         if (method === "GET") {
           if (!requireOwner(req, res, "GET", path, agentId)) return;
+          store.observeAgent(agentId, countryCode, new Date(now));
           send(res, 200, { envelopes: store.listEnvelopes(agentId) });
           return;
         }
@@ -360,6 +408,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
         const agentId = relayDel[1]!;
         const envId = relayDel[2]!;
         if (!requireOwner(req, res, "DELETE", path, agentId)) return;
+        store.observeAgent(agentId, countryCode, new Date(now));
         store.deleteEnvelope(agentId, envId);
         metrics.envelopes_acked++;
         send(res, 200, { ok: true });
@@ -368,7 +417,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
 
       send(res, 404, { error: "not_found" });
     } catch (e) {
-      // 클라에는 일반 메시지만(절대경로/내부 레이아웃 누출 방지). 상세는 서버 로그로.
+      // Internal implementation note.
       process.stderr.write(`[tl-relay] 500 ${method} ${path}: ${(e as Error).message}\n`);
       send(res, 500, { error: "internal" });
     }
@@ -385,7 +434,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     });
   });
 
-  // 주기 GC: nonce 캐시 + rate + 봉투/카드 TTL
+  // Internal implementation note.
   const t1 = setInterval(() => {
     const now = Date.now();
     for (const [n, exp] of seenNonces) if (exp <= now) seenNonces.delete(n);
@@ -398,7 +447,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
   return { server, store, metrics, timers: [t1, t2] };
 }
 
-/** 서버 시작(프로그램적 사용/테스트). port=0 이면 OS가 빈 포트 할당. */
+/** Internal implementation note. */
 export function startServer(cfg: ServerConfig = resolveServerConfig()): Promise<RunningServer> {
   const { server, store, timers } = createApp(cfg);
   return new Promise((res, rej) => {
@@ -423,8 +472,8 @@ export function startServer(cfg: ServerConfig = resolveServerConfig()): Promise<
 async function main(): Promise<void> {
   const cfg = resolveServerConfig();
   const running = await startServer(cfg);
-  const admission = cfg.open ? "OPEN (admission 해제)" : cfg.accessToken ? "TOKEN (X-TL-Access 필요)" : "⚠ NO TOKEN (권장: TL_RELAY_ACCESS_TOKEN 설정 또는 TL_RELAY_OPEN=true)";
-  // 테스트 하네스가 stdout에서 포트를 읽음
+  const admission = cfg.open ? "OPEN (admission disabled)" : cfg.accessToken ? "TOKEN (X-TL-Access required)" : "WARN NO TOKEN (recommended: set TL_RELAY_ACCESS_TOKEN or TL_RELAY_OPEN=true)";
+  // Internal implementation note.
   console.log(`TL_RELAY_LISTENING ${running.port}`);
   process.stderr.write(
     `Shellmates relay/directory v${SERVER_VERSION} → http://${cfg.host}:${running.port}\n` +

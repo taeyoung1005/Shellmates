@@ -1,6 +1,6 @@
-// relay 서버를 별도 프로세스로 기동하는 헬퍼(데모/테스트 공용).
-// 별도 프로세스여야 하는 이유: 클라이언트의 syncFetch는 execFileSync로 메인 이벤트루프를 블로킹한다.
-// 서버가 같은 프로세스에 있으면 응답을 못 해 데드락 → 반드시 분리 프로세스(= 실제 크로스머신과 동일).
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import { spawn, type ChildProcess } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ export interface SpawnOptions {
   readyTimeoutMs?: number;
 }
 
-/** server.ts(tsx) 또는 server.js(dist)를 자식 프로세스로 띄우고 리스닝 포트를 회수. */
+/** Internal implementation note. */
 export function spawnRelayServer(opts: SpawnOptions = {}): Promise<SpawnedServer> {
   const selfPath = fileURLToPath(import.meta.url);
   const here = dirname(selfPath);
@@ -61,7 +61,7 @@ export function spawnRelayServer(opts: SpawnOptions = {}): Promise<SpawnedServer
               if (proc.exitCode !== null || proc.signalCode) return done();
               proc.once("exit", () => done());
               proc.kill("SIGTERM");
-              // 안전망: 1.5초 내 미종료 시 SIGKILL
+              // Internal implementation note.
               setTimeout(() => {
                 if (proc.exitCode === null && !proc.signalCode) proc.kill("SIGKILL");
               }, 1500).unref?.();

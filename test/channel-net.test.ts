@@ -1,4 +1,4 @@
-// 채널 서버가 실제 배포 경로(HTTP relay 서버)에서도 동작하는지 — 별도 프로세스 relay + HTTP transport.
+// Internal implementation note.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -39,7 +39,7 @@ test("channel over HTTP relay: incoming message → claude/channel push", async 
     assert.ok(captured[0]!.params.content.includes("network hello bob"));
     assert.equal(captured[0]!.params.meta.kind, "message");
     assert.equal(captured[0]!.params.meta.from, aId);
-    // durable: 재폴링 시 중복 없음
+    // Internal implementation note.
     assert.equal(await channelTick(server, bob), 0);
   } finally {
     await client.close();

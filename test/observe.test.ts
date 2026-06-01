@@ -21,9 +21,9 @@ function writeTranscript(dir: string, lines: object[]): string {
 test("observeProfile (heuristic): extracts stacks/interests/language from transcripts", () => {
   const root = mkdtempSync(join(tmpdir(), "tl-observe-"));
   writeTranscript(root, [
-    { type: "user", message: { role: "user", content: "TypeScript랑 Rust로 AI agent 만들고 있어요. MCP tool use 붙이는 중." } },
-    { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "좋아요. React 프론트엔드도 붙일까요? Docker로 배포하죠." }] } },
-    { type: "user", message: { role: "user", content: "네 startup MVP라서 빨리 가야 해요. side project 느낌도 있고." } },
+    { type: "user", message: { role: "user", content: "I am building an AI agent with TypeScript and Rust and adding MCP tool use. \uC548\uB155\uD558\uC138\uC694." } },
+    { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Good. Should we add a React frontend and deploy with Docker?" }] } },
+    { type: "user", message: { role: "user", content: "Yes, it is a startup MVP, so we need to move fast. It also feels like a side project." } },
   ]);
   const r = observeProfile({ roots: [root], llm: () => null });
   assert.equal(r.source, "heuristic");
@@ -56,7 +56,7 @@ test("observeProfile: empty corpus → safe heuristic fallback note", () => {
   const r = observeProfile({ roots: [root], llm: () => null });
   assert.equal(r.source, "heuristic");
   assert.equal(r.chars, 0);
-  assert.match(r.note, /No local agent history found|찾지 못했습니다/);
+  assert.match(r.note, /No local agent history found|No local agent history found/);
 });
 
 function chatWith(messages: Chat["messages"]): Chat {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 백그라운드 데몬 — relay를 주기 watch, 새 봉투 ingest, out-of-band 알림(사운드/notify.json/stderr).
-// 컨텍스트 방화벽: 메시지 본문·코칭은 절대 출력하지 않는다. 카운트/이벤트/발신 alias 만 노출.
+// Internal implementation note.
+// Internal implementation note.
 import { spawnSync } from "node:child_process";
 import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
@@ -15,19 +15,19 @@ function playSound(): void {
       spawnSync("afplay", ["/System/Library/Sounds/Glass.aiff"], { stdio: "ignore", timeout: 3000 });
     }
   } catch {
-    /* best-effort: 사운드는 실패해도 무시 */
+    /* Internal implementation note. */
   }
 }
 
 function notifyLine(engine: Engine): void {
   const n = engine.state.notifications;
-  // 본문 없음: 카운트 + 이벤트 + 발신 alias 까지만 (컨텍스트 방화벽)
+  // Internal implementation note.
   process.stderr.write(
     `🔔 Shellmates: ${n.unread} unread — last "${n.last_event ?? "-"}" from ${n.last_from_alias ?? "-"}\n`,
   );
 }
 
-/** 단일 폴링 틱. 새 이벤트가 있으면 out-of-band 알림. 거부 카운트 포함 전체 결과 반환. */
+/** Internal implementation note. */
 export function tick(engine: Engine): IngestResult {
   const before = engine.state.notifications.unread;
   const r = engine.poll();
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   const intervalMs = Number(process.env.TL_DAEMON_INTERVAL_MS ?? "2000");
   const engine = Engine.open();
   if (!engine.agentId) {
-    console.error("신원이 없습니다. 먼저 CLI에서 init 하세요.");
+    console.error("Identity is missing. Run init in the CLI first.");
     process.exit(1);
   }
   if (once) {

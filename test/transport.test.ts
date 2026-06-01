@@ -1,4 +1,4 @@
-// Transport 양 구현(LocalFs/Http) 동등성 — 같은 directory/relay 동작을 관찰 수준에서 일치 확인.
+// Internal implementation note.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -53,8 +53,8 @@ function mkEnvelope(from: Identity, toId: string): Envelope {
   );
 }
 
-// 두 transport에 대해 동일 시나리오를 실행하는 헬퍼.
-// revoke(DELETE /directory)는 소유자 서명 인증이 필요하므로, transport는 카드 owner 신원에 바인딩한다.
+// Internal implementation note.
+// Internal implementation note.
 function directoryScenario(makeTp: (owner: Identity) => Transport): { lookupOwner: string | null; inScan: boolean; afterRevoke: boolean } {
   const id = generateIdentity();
   const tp = makeTp(id);
@@ -82,12 +82,12 @@ test("directory equivalence: LocalFs vs Http (publish/lookup/scan/revoke)", () =
   const local = directoryScenario(() => localTransport());
   const http = directoryScenario((owner) => httpTransport(() => owner));
 
-  assert.ok(local.lookupOwner !== null, "local lookup이 카드 반환");
-  assert.ok(http.lookupOwner !== null, "http lookup이 카드 반환");
+  assert.ok(local.lookupOwner !== null, "local lookup returns card");
+  assert.ok(http.lookupOwner !== null, "http lookup returns card");
   assert.equal(local.inScan, true);
   assert.equal(http.inScan, true);
-  assert.equal(local.afterRevoke, false, "local revoke 후 lookup null");
-  assert.equal(http.afterRevoke, false, "http revoke 후 lookup null");
+  assert.equal(local.afterRevoke, false, "local lookup is null after revoke");
+  assert.equal(http.afterRevoke, false, "http lookup is null after revoke");
 });
 
 test("relay equivalence: LocalFs vs Http (send/poll/delete)", () => {
@@ -96,14 +96,14 @@ test("relay equivalence: LocalFs vs Http (send/poll/delete)", () => {
   const httpRecip = generateIdentity();
   const http = relayScenario(httpTransport(() => httpRecip), httpRecip);
 
-  assert.equal(local.polledIds.length, 1, "local: 봉투 1건 poll");
-  assert.equal(http.polledIds.length, 1, "http: 봉투 1건 poll");
-  assert.equal(local.afterDelete, 0, "local: delete 후 0건");
-  assert.equal(http.afterDelete, 0, "http: delete 후 0건");
+  assert.equal(local.polledIds.length, 1, "local: polls one envelope");
+  assert.equal(http.polledIds.length, 1, "http: polls one envelope");
+  assert.equal(local.afterDelete, 0, "local: zero envelopes after delete");
+  assert.equal(http.afterDelete, 0, "http: zero envelopes after delete");
 });
 
 test("directory pagination: scanCards pages through ALL cards beyond one page (PLAN §10)", () => {
-  // 페이지 크기보다 많은 카드를 게시하고, 작은 limit로 scanCards가 전부 순회하는지 확인.
+  // Internal implementation note.
   const N = 7;
   const owners: string[] = [];
   for (let i = 0; i < N; i++) {
@@ -112,26 +112,26 @@ test("directory pagination: scanCards pages through ALL cards beyond one page (P
     new HttpTransport(srv.baseUrl, () => id, TOKEN).publishCard(signProfile(id, buildProfile(id, { ...ALICE_NET, display_name: `P${i}` })));
   }
   const tp = new HttpTransport(srv.baseUrl, () => generateIdentity(), TOKEN);
-  // 페이지 크기 3 → 7개를 보려면 3페이지 순회 필요
+  // Internal implementation note.
   const got = tp.scanCards(new Date(), { limit: 3 });
   const gotOwners = new Set(got.map((c) => c.owner));
-  for (const o of owners) assert.ok(gotOwners.has(o), `페이지네이션으로 모든 카드(${o})를 봐야 함 — 본 수: ${got.length}`);
-  assert.ok(got.length >= N, `최소 ${N}개(페이지네이션) 반환, 실제 ${got.length}`);
+  for (const o of owners) assert.ok(gotOwners.has(o), `pagination should include every card(${o}) - seen count: ${got.length}`);
+  assert.ok(got.length >= N, `at least ${N} cards returned through pagination, actual ${got.length}`);
 });
 
 test("server rejects tampered card on PUT (400), and client never sees it", async () => {
   const { syncFetch } = await import("../src/core/sync-fetch.js");
   const id = generateIdentity();
   const card = signProfile(id, buildProfile(id, ALICE_NET));
-  // 서명 후 필드 변조 → 서명 불일치
+  // Internal implementation note.
   const tampered = { ...card, interests: ["Hacking", "Spam"] };
   const put = syncFetch(`${srv.baseUrl}/directory/${id.agent_id}`, {
     method: "PUT",
     headers: { "content-type": "application/json", "x-tl-access": TOKEN },
     body: JSON.stringify(tampered),
   });
-  assert.equal(put.status, 400, "변조 카드 PUT은 서버가 거부(400)");
-  // 클라 lookup도 (존재하지 않으므로) null
+  assert.equal(put.status, 400, "tampered card PUT should be rejected (400)");
+  // Internal implementation note.
   const tp = httpTransport(() => id);
-  assert.equal(tp.lookupCard(id.agent_id), null, "거부된 카드는 lookup되지 않음");
+  assert.equal(tp.lookupCard(id.agent_id), null, "rejected card should not be found by lookup");
 });

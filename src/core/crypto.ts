@@ -1,7 +1,7 @@
-// 암호 레이어 — Node 내장 crypto만 사용 (tweetnacl 대신, 동일 프리미티브·의존성 0).
-//  - 신원/서명: Ed25519
-//  - E2E 암호화: X25519 ECDH → HKDF-SHA256 → AES-256-GCM
-//  - agent_id: Ed25519 공개키의 SHA-256 fingerprint
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import {
   createCipheriv,
   createDecipheriv,
@@ -23,9 +23,9 @@ import { b64url, canonicalize, fromB64url, newNonce, nowIso } from "./util.js";
 const HKDF_INFO = Buffer.from("shellmates-msg-v0.1");
 
 /**
- * Ed25519 공개키 fingerprint → agent_id (16 hex = 64-bit, 충돌/사칭 저항).
- * 적대/버그 입력 방어: 비문자열/디코딩 불가 입력엔 throw 대신 "agent_invalid"(어떤 유효 id와도 불일치)를 반환한다.
- * → verifyEnvelope/verifyCard가 throw하지 않고 "거부"로 귀결되어, ingest/scan 트랜잭션이 깨지지 않음.
+ * Internal implementation note.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function agentIdFromSignPub(signPubB64: string): string {
   if (typeof signPubB64 !== "string") return "agent_invalid";
@@ -38,7 +38,7 @@ export function agentIdFromSignPub(signPubB64: string): string {
   }
 }
 
-/** 새 신원(서명 + 암호화 키페어) 생성 */
+/** Internal implementation note. */
 export function generateIdentity(): Identity {
   const ed = generateKeyPairSync("ed25519");
   const x = generateKeyPairSync("x25519");
@@ -63,7 +63,7 @@ export function publicIdentity(id: Identity): PublicIdentity {
   return { agent_id: id.agent_id, sign_pub: id.sign_pub, box_pub: id.box_pub };
 }
 
-// ── KeyObject 복원 헬퍼 ─────────────────────────────────────────────
+// Internal implementation note.
 function edPublicKey(x: string): KeyObject {
   return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" });
 }
@@ -77,7 +77,7 @@ function xPrivateKey(x: string, d: string): KeyObject {
   return createPrivateKey({ key: { kty: "OKP", crv: "X25519", x, d }, format: "jwk" });
 }
 
-// ── 서명/검증 ────────────────────────────────────────────────────────
+// Internal implementation note.
 export function signBytes(data: Buffer | string, identity: Identity): string {
   const buf = typeof data === "string" ? Buffer.from(data) : data;
   const key = edPrivateKey(identity.sign_pub, identity.sign_priv);
@@ -94,7 +94,7 @@ export function verifyBytes(data: Buffer | string, sigB64: string, signPubB64: s
   }
 }
 
-// ── E2E 암호화 (X25519 → HKDF → AES-256-GCM) ────────────────────────
+// Internal implementation note.
 function sharedSecret(myBoxPriv: string, myBoxPub: string, theirBoxPub: string): Buffer {
   const priv = xPrivateKey(myBoxPub, myBoxPriv);
   const pub = xPublicKey(theirBoxPub);
@@ -131,8 +131,8 @@ export function decryptFrom(blob: CipherBlob, theirBoxPub: string, me: Identity)
   return pt.toString("utf8");
 }
 
-// ── 패스프레이즈 기반 시크릿 암호화 (키 백업용, PLAN §10) ─────────────────
-// scrypt(passphrase) → AES-256-GCM. backup-key를 평문이 아닌 암호문으로 보관.
+// Internal implementation note.
+// Internal implementation note.
 export interface SecretBox {
   v: "tl-secret-1";
   kdf: "scrypt";
@@ -162,7 +162,7 @@ export function decryptWithPassphrase(box: SecretBox, passphrase: string): strin
   return Buffer.concat([decipher.update(fromB64url(box.ct)), decipher.final()]).toString("utf8");
 }
 
-// ── 봉투 서명/검증 ────────────────────────────────────────────────────
+// Internal implementation note.
 function envelopeSigningPayload(env: Envelope): string {
   const { signature, ...rest } = env;
   void signature;
@@ -176,19 +176,19 @@ export function signEnvelope(env: Envelope, identity: Identity): Envelope {
 }
 
 /**
- * 봉투 검증: 서명 유효성 + from == fingerprint(sign_pub) 바인딩까지 확인.
- * 클라이언트가 주장하는 from을 그대로 믿지 않고, 서명한 키로부터 agent_id를 재계산해 일치 여부를 강제한다.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function verifyEnvelope(env: Envelope, senderSignPub: string): boolean {
   if (!env.signature) return false;
-  if (agentIdFromSignPub(senderSignPub) !== env.from) return false; // 사칭 방지(바인딩)
+  if (agentIdFromSignPub(senderSignPub) !== env.from) return false;
   return verifyBytes(envelopeSigningPayload(env), env.signature, senderSignPub);
 }
 
-// ── HTTP 요청 서명 인증 (TL-Sig) ─────────────────────────────────────
-// 계정 없음. relay inbox 읽기/삭제는 "그 agent_id의 개인키 소유자"만 가능해야 한다(메타데이터 보호).
-// 서명 대상: canonical({method, path, agent_id, ts, nonce}). 서버는 fingerprint(pub)==agent_id +
-// 서명 유효 + ts 신선(±2분) + nonce 미사용(replay 캐시)을 확인한다.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 export const AUTH_SCHEME = "TL-Sig";
 export const AUTH_VERSION = "0.1";
 export const AUTH_SKEW_MS = 2 * 60 * 1000;
@@ -197,7 +197,7 @@ function authSigningPayload(method: string, path: string, agentId: string, ts: s
   return canonicalize({ method: method.toUpperCase(), path, agent_id: agentId, ts, nonce });
 }
 
-/** 인증 헤더 문자열 생성. `Authorization: <이 값>` 으로 전송. */
+/** Internal implementation note. */
 export function signAuth(identity: Identity, method: string, path: string): string {
   const ts = nowIso();
   const nonce = newNonce();
@@ -205,7 +205,7 @@ export function signAuth(identity: Identity, method: string, path: string): stri
   return `${AUTH_SCHEME} v=${AUTH_VERSION}, agent_id=${identity.agent_id}, pub=${identity.sign_pub}, ts=${ts}, nonce=${nonce}, sig=${sig}`;
 }
 
-/** `TL-Sig v=.., agent_id=.., pub=.., ts=.., nonce=.., sig=..` 헤더 파싱. 실패 시 null. */
+/** Internal implementation note. */
 export function parseAuthHeader(header: string | undefined): Record<string, string> | null {
   if (!header) return null;
   const trimmed = header.trim();
@@ -230,8 +230,8 @@ export interface AuthResult {
 }
 
 /**
- * 인증 헤더 검증(서명 + agent_id 바인딩 + 버전 + ts 신선도).
- * nonce replay 캐시는 호출자(서버)가 반환된 nonce로 관리한다.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function verifyAuth(
   header: string | undefined,

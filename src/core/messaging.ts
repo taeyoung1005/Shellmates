@@ -1,6 +1,6 @@
-// 메시징 — intro → accept → 1:1 암호화 대화 + relay ingest(서명/바인딩/replay/미매칭 방어).
-// 1:1 불변식: active_chat 0~1개, outbox_intro 0~1개.
-// directory/relay 접근은 Transport 추상화 경유(LocalFs=공유폴더, Http=네트워크 서버).
+// Internal implementation note.
+// Internal implementation note.
+// Internal implementation note.
 import {
   agentIdFromSignPub,
   decryptFrom,
@@ -80,9 +80,9 @@ function pushMessage(chat: Chat, direction: "in" | "out", from: string, text: st
   return msg;
 }
 
-// ── 발신 ─────────────────────────────────────────────────────────────
+// Internal implementation note.
 
-/** 소개 요청 전송 (1:1: active_chat·outbox_intro가 모두 없어야 함). */
+/** Internal implementation note. */
 export function sendIntro(tp: Transport, state: State, targetAgentId: string, firstMessage?: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first (/shellmates init)." };
   if (!state.profile?.signature) return { ok: false, message: "Create and publish your profile first (/shellmates profile, /shellmates publish)." };
@@ -130,7 +130,7 @@ export function sendIntro(tp: Transport, state: State, targetAgentId: string, fi
   return { ok: true, message: `Intro sent to ${targetAgentId}. A 1:1 chat opens if they accept.` };
 }
 
-/** 보낸 intro 취소 */
+/** Internal implementation note. */
 export function cancelIntro(state: State): Result {
   if (!state.outbox_intro) return { ok: false, message: "No pending intro." };
   const to = state.outbox_intro.to;
@@ -138,7 +138,7 @@ export function cancelIntro(state: State): Result {
   return { ok: true, message: `Canceled intro to ${to}.` };
 }
 
-/** 받은 intro 수락 → 1:1 대화 생성 + 상대에게 accept 통지 */
+/** Internal implementation note. */
 export function acceptIntro(tp: Transport, state: State, introId: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   if (state.active_chat) return { ok: false, message: "You are already in a 1:1 chat. End it first (/shellmates end)." };
@@ -179,7 +179,7 @@ export function acceptIntro(tp: Transport, state: State, introId: string): Resul
   return { ok: true, message: `Intro accepted. 1:1 chat opened with ${intro.profile.display_name ?? intro.peer.agent_id}.` };
 }
 
-/** 받은 intro 거절 */
+/** Internal implementation note. */
 export function declineIntro(tp: Transport, state: State, introId: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const intro = state.inbox_intros.find((i) => i.intro_id === introId || i.conversation_id === introId);
@@ -199,7 +199,7 @@ export function declineIntro(tp: Transport, state: State, introId: string): Resu
   return { ok: true, message: "Intro declined." };
 }
 
-/** 현재 1:1 대화에 메시지 전송 */
+/** Internal implementation note. */
 export function sendMessage(tp: Transport, state: State, text: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
@@ -223,7 +223,7 @@ export function sendMessage(tp: Transport, state: State, text: string): Result {
   return { ok: true, message: "Sent." };
 }
 
-/** 현재 대화 종료(언매치). block=true면 일방향 차단까지. */
+/** Internal implementation note. */
 export function endChat(tp: Transport, state: State, block = false): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
@@ -251,13 +251,13 @@ export function endChat(tp: Transport, state: State, block = false): Result {
   return { ok: true, message: block ? `Ended the chat with ${who} and blocked them.` : `Ended the chat with ${who}.` };
 }
 
-/** 일방향 차단(기본=현재 상대). 조용한 차단(상대에게 차단 사실 미통지). */
+/** Internal implementation note. */
 export function blockAgent(tp: Transport, state: State, agentId?: string): Result {
   const target = agentId ?? state.active_chat?.partner.agent_id;
   if (!target) return { ok: false, message: "No target to block." };
   if (!state.blocked.includes(target)) state.blocked.push(target);
   if (!state.no_resuggest.includes(target)) state.no_resuggest.push(target);
-  // 현재 상대를 차단하면 대화도 정리(일반 end 통지만, '차단됨'은 알리지 않음)
+  // Internal implementation note.
   if (state.active_chat && state.active_chat.partner.agent_id === target) {
     endChat(tp, state, false);
   }
@@ -270,15 +270,15 @@ export function reportAgent(state: State, agentId: string, reason: string): Resu
   return { ok: true, message: `Reported ${agentId} (reason: ${reason || "not provided"}). They will be excluded from future recommendations.` };
 }
 
-// ── 수신 ingest ──────────────────────────────────────────────────────
+// Internal implementation note.
 
-/** 발신자 sign_pub 결정(타입별 신뢰 기준). 못 찾으면 null → 거부. */
+/** Internal implementation note. */
 function expectedSenderSignPub(state: State, env: Envelope): string | null {
   switch (env.type) {
     case "intro": {
       const si = env.sender_identity;
       if (!si) return null;
-      // 봉투가 주장하는 from과 sender_identity의 일치 + 바인딩은 verifyEnvelope에서 재확인
+      // Internal implementation note.
       if (si.agent_id !== env.from) return null;
       return si.sign_pub;
     }
@@ -302,9 +302,9 @@ function expectedSenderSignPub(state: State, env: Envelope): string | null {
 }
 
 /**
- * relay inbox를 폴링해 검증된 봉투만 상태에 반영.
- * collect를 넘기면(채널 서버, 데이팅 세션 전용) 반영된 수신 항목을 본문 포함해 흘려보낸다.
- * 넘기지 않으면(데몬/thin MCP/CLI) 수집하지 않으므로 컨텍스트 방화벽이 보존된다.
+ * Internal implementation note.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function pollAndIngest(tp: Transport, state: State, collect?: ChannelCollector): IngestResult {
   const result: IngestResult = { ingested: 0, rejected: 0, events: [] };
@@ -314,25 +314,25 @@ export function pollAndIngest(tp: Transport, state: State, collect?: ChannelColl
   for (const { env, ref } of tp.pollEnvelopes(me)) {
     const drop = () => tp.deleteEnvelope(ref);
 
-    // 1) 중복(replay) — 이미 처리한 id
+    // Internal implementation note.
     if (state.seen_env.includes(env.id)) {
       drop();
       continue;
     }
-    // 2) 수신자 확인
+    // Internal implementation note.
     if (env.to !== me) {
       result.rejected++;
       markSeen(state, env.id);
       drop();
       continue;
     }
-    // 3) 차단된 상대는 조용히 폐기
+    // Internal implementation note.
     if (state.blocked.includes(env.from)) {
       markSeen(state, env.id);
       drop();
       continue;
     }
-    // 4) 발신자 키 결정 + 서명/바인딩 검증
+    // Internal implementation note.
     const signPub = expectedSenderSignPub(state, env);
     if (!signPub || !verifyEnvelope(env, signPub)) {
       result.rejected++;
@@ -361,7 +361,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
       if (!card || !verifyCard(card).ok) return null; // reject invalid signed/expired profiles
       if (card.owner !== env.from || card.sign_pub !== signPub) return null; // card owner/key binding
       if (env.from === state.identity!.agent_id) return null; // ignore self-intro
-      // conversation_id 충돌(기존 대화/intro 하이재킹) 방지
+      // Internal implementation note.
       const conv = env.conversation_id;
       if (
         state.active_chat?.conversation_id === conv ||
@@ -371,7 +371,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
       ) {
         return null;
       }
-      // 서명된 카드 기준으로 peer/box_pub 도출 (unsigned sender_identity의 키 치환 방지)
+      // Internal implementation note.
       const peer = identityFromCard(card);
       let firstMessage: string | undefined;
       if (env.body) {
@@ -382,7 +382,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
         }
       }
       const fmSan = firstMessage ? sanitizeIncoming(firstMessage) : undefined;
-      // 스팸 방지: inbox 최대 50건 유지(초과 시 오래된 것 제거)
+      // Internal implementation note.
       if (state.inbox_intros.length >= 50) state.inbox_intros.shift();
       const alias = card.display_name ?? env.from;
       const rec: IntroRecord = {
@@ -497,7 +497,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
   }
 }
 
-/** cold 대화 자동 보관: 마지막 활동이 cold_days를 넘으면 종료 제안 신호만 남김(자동 end는 하지 않음). */
+/** Internal implementation note. */
 export function coldCheck(state: State, now: Date = new Date()): boolean {
   const chat = state.active_chat;
   if (!chat) return false;

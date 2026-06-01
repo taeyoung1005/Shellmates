@@ -1,5 +1,5 @@
-// Engine — CLI/MCP/데몬/테스트/데모 공용 상위 오케스트레이션 API.
-// 모든 변경 메서드는 withLock으로 reload→mutate→save 를 원자적으로 수행해 멀티 프로세스 레이스를 방지한다.
+// Internal implementation note.
+// Internal implementation note.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { coachDraft, coachReply } from "./coaching.js";
@@ -45,24 +45,24 @@ export interface EngineResult {
 export class Engine {
   readonly ctx: Ctx;
   state: State;
-  /** 활성 transport(LocalFs 또는 Http). 신원은 매 호출 시 현재 state에서 lazy하게 읽음. */
+  /** Internal implementation note. */
   readonly tp: Transport;
-  /** 코칭/관찰 요약용 LLM(TL_LLM). 미설정 시 ()=>null → 휴리스틱 폴백. */
+  /** Internal implementation note. */
   readonly llm: LlmFn;
 
   /**
-   * 채널 수집 버퍼 — 모든 ingest 경로(폴 루프 + 도구 호출)가 새로 반영된 수신 항목을 여기 쌓는다.
-   * 채널 서버가 폴 루프/도구 호출 후 drainChannelItems()로 꺼내 push → destructive-poll 경쟁으로
-   * 메시지가 채널 push 없이 삼켜지는 것을 방지(PLAN3 §13: 단일 engine, 모든 ingest가 channelize).
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
    */
   private chanBuf: ChannelItem[] = [];
-  /** 설정 시(채널 서버): 도구 호출로 ingest된 새 항목을 microtask에서 drain→push. */
+  /** Internal implementation note. */
   private channelSink?: (items: ChannelItem[]) => void | Promise<void>;
   private flushScheduled = false;
   private readonly collectItem = (it: ChannelItem): void => {
-    // sink가 없으면(standalone full MCP / CLI / 테스트) 버퍼링하지 않음 → 기존 동작 보존.
-    // sink가 있으면(채널 서버) 도구 호출이 부수적으로 ingest한 항목을 모아, 현재 동기 tx가 끝난 뒤
-    // 한 번만 drain→push 예약. (channelPoll은 별도 로컬 배열을 쓰므로 중복 push 없음.)
+    // Internal implementation note.
+    // Internal implementation note.
+    // Internal implementation note.
     if (!this.channelSink) return;
     this.chanBuf.push(it);
     if (!this.flushScheduled) {
@@ -74,11 +74,11 @@ export class Engine {
       });
     }
   };
-  /** 채널 서버가 도구-경로 ingest 항목을 받을 sink 등록. */
+  /** Internal implementation note. */
   setChannelSink(fn: (items: ChannelItem[]) => void | Promise<void>): void {
     this.channelSink = fn;
   }
-  /** 버퍼에 쌓인 채널 항목을 꺼내고 비운다. */
+  /** Internal implementation note. */
   drainChannelItems(): ChannelItem[] {
     return this.chanBuf.splice(0);
   }
@@ -106,7 +106,7 @@ export class Engine {
     return this.state.identity?.agent_id ?? null;
   }
 
-  /** 락 보호하에 reload→mutate→save 를 원자적으로 수행 */
+  /** Internal implementation note. */
   private tx<T>(fn: () => T): T {
     return withLock(this.ctx, () => {
       this.state = loadState(this.ctx);
@@ -116,15 +116,15 @@ export class Engine {
     });
   }
 
-  /** 읽기 전용: 최신 상태 reload 후 fn (저장 없음). saveState가 원자적이라 락 불필요. */
+  /** Internal implementation note. */
   private rx<T>(fn: () => T): T {
     this.state = loadState(this.ctx);
     return fn();
   }
 
   /**
-   * 네트워크 transport 오류(서버 미가용/거부 등 throw)를 EngineResult 실패로 변환.
-   * LocalFs 모드에선 transport가 throw하지 않으므로 사실상 no-op(기존 동작 불변).
+   * Internal implementation note.
+   * Internal implementation note.
    */
   private guard<T>(fn: () => T, onErr: (msg: string) => T): T {
     try {
@@ -135,11 +135,11 @@ export class Engine {
   }
 
   /**
-   * poll-then-send 패턴의 원자성 보장(HIGH 버그 수정).
-   * pollAndIngest는 수신 봉투를 로컬에 반영 + relay에서 DELETE(ack, 비가역)한다.
-   * 이를 send와 같은 tx에 두면, 이후 send가 throw(서버 429/5xx 등)할 때 tx가 롤백되어
-   * "이미 서버에서 삭제된" 수신 메시지가 로컬에도 저장되지 않아 영구 유실된다.
-   * → ingest를 먼저 독립 tx로 커밋(durable)한 뒤, 순수 send만 guarded tx로 수행한다.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
    */
   private sendAfterIngest<T>(send: () => T, onErr: (msg: string) => T): T {
     this.tx(() => {
@@ -148,7 +148,7 @@ export class Engine {
     return this.guard(() => this.tx(send), onErr);
   }
 
-  // ── 신원/프로필 ───────────────────────────────────────────────────
+  // Internal implementation note.
   init(): EngineResult & { agent_id?: string } {
     return this.tx(() => {
       if (this.state.identity) {
@@ -162,7 +162,7 @@ export class Engine {
   makeProfile(answers: ProfileAnswers): EngineResult & { card?: ProfileCard } {
     return this.tx(() => {
       if (!this.state.identity) return { ok: false, message: "Run init first." };
-      // federation 힌트: 명시값 없고 서버 모드면 내 home relay를 카드에 기록(v1 라우팅 미사용, 예약).
+      // Internal implementation note.
       const enriched: ProfileAnswers =
         !answers.home_relay && this.ctx.server ? { ...answers, home_relay: this.ctx.server.baseUrl } : answers;
       const signed = signProfile(this.state.identity, buildProfile(this.state.identity, enriched));
@@ -177,8 +177,8 @@ export class Engine {
   }
 
   /**
-   * Phase 2F: 로컬 코딩 에이전트 기록을 관찰해 프로필 초안(ProfileAnswers)을 만든다.
-   * 데이터는 로컬에서만 처리되며, 결과는 초안일 뿐 자동 게시하지 않는다(CLI에서 검토 후 publish).
+   * Internal implementation note.
+   * Internal implementation note.
    */
   observeForProfile(opts?: { roots?: string[] }): ObserveResult {
     return observeProfile({ llm: this.llm, ...(opts?.roots ? { roots: opts.roots } : {}) });
@@ -208,7 +208,7 @@ export class Engine {
     });
   }
 
-  /** 서명된 프로필을 파일로 내보내기(오프라인 공유용). */
+  /** Internal implementation note. */
   exportProfile(outPath?: string): EngineResult & { path?: string; card?: ProfileCard } {
     return this.rx(() => {
       if (!this.state.profile?.signature) return { ok: false, message: "No profile to export. Create a profile first." };
@@ -218,7 +218,7 @@ export class Engine {
     });
   }
 
-  /** 서명된 프로필 카드를 파일에서 가져와 검증 후 로컬 디렉토리에 추가(매칭 후보로). */
+  /** Internal implementation note. */
   importProfile(inPath: string): EngineResult & { owner?: string } {
     return this.rx(() => {
       if (!existsSync(inPath)) return { ok: false, message: `File not found: ${inPath}` };
@@ -240,7 +240,7 @@ export class Engine {
     });
   }
 
-  /** 초대 링크 생성(내 공개 신원 공유용). */
+  /** Internal implementation note. */
   invite(): EngineResult & { link?: string } {
     return this.rx(() => {
       if (!this.state.identity) return { ok: false, message: "Run init first." };
@@ -250,8 +250,8 @@ export class Engine {
     });
   }
 
-  // ── 키 관리 ───────────────────────────────────────────────────────
-  /** 개인키 백업. passphrase 주면 scrypt+AES-GCM으로 암호화 저장(권장, PLAN §10). 파일은 0600. */
+  // Internal implementation note.
+  /** Internal implementation note. */
   backupKey(outPath?: string, passphrase?: string): EngineResult & { path?: string; encrypted?: boolean } {
     return this.rx(() => {
       if (!this.state.identity) return { ok: false, message: "No identity to back up." };
@@ -267,7 +267,7 @@ export class Engine {
     });
   }
 
-  /** 키 복원. 파일이 암호화된 백업이면 passphrase 필요. */
+  /** Internal implementation note. */
   importKey(inPath: string, passphrase?: string): EngineResult & { agent_id?: string } {
     return this.tx(() => {
       if (!existsSync(inPath)) return { ok: false, message: `File not found: ${inPath}` };
@@ -305,7 +305,7 @@ export class Engine {
       if (this.state.published) this.tp.revokeCard(this.state.identity.agent_id);
       const fresh = generateIdentity();
       this.state.identity = fresh;
-      // 새 신원이라 기존 프로필/대화/intro는 무효화 → 초기화 후 재생성/재게시 필요
+      // Internal implementation note.
       this.state.profile = null;
       this.state.published = false;
       this.state.active_chat = null;
@@ -315,13 +315,13 @@ export class Engine {
     });
   }
 
-  // ── 디스커버리 ────────────────────────────────────────────────────
+  // Internal implementation note.
   scan(): EngineResult & { matches: MatchResult[] } {
-    // 1) 수신 ingest를 먼저 durable 커밋(비가역 relay DELETE가 롤백되지 않도록 — sendAfterIngest와 동일 원칙).
+    // Internal implementation note.
     this.tx(() => {
       pollAndIngest(this.tp, this.state, this.collectItem);
     });
-    // 2) fallible한 디렉토리 읽기(scanCards)는 저장 없는 guarded read로 분리 → throw해도 ingest 유실 없음.
+    // Internal implementation note.
     return this.guard(
       () =>
         this.rx(() => {
@@ -346,7 +346,7 @@ export class Engine {
     }
   }
 
-  // ── 메시징 ────────────────────────────────────────────────────────
+  // Internal implementation note.
   poll(): IngestResult {
     return this.guard(
       () => this.tx(() => pollAndIngest(this.tp, this.state, this.collectItem)),
@@ -355,15 +355,15 @@ export class Engine {
   }
 
   /**
-   * 실시간 채널(PLAN3 §13) 전용 폴링 — relay를 ingest하면서 새로 반영된 수신 항목을
-   * 본문 포함 ChannelItem[]로 수집해 반환한다. poll()과 동일한 durable-ingest + guard 안전 프로파일:
-   * - tx 안에서 ingest(비가역 relay DELETE 포함)를 커밋 → 메시지 유실 방지.
-   * - collector는 배열 push만 하므로 throw 불가 → pollAndIngest의 hostile-input 내성과 동일.
-   * - 네트워크 transport throw는 guard로 흡수 → []. (데이팅 세션 전용이라 본문 수집은 의도된 동작.)
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
+   * Internal implementation note.
    */
   channelPoll(): ChannelItem[] {
-    // 폴 루프 전용: 로컬 배열로 수집해 반환(채널 서버 channelTick이 push). chanBuf와 분리 →
-    // 도구-경로(sink) 버퍼와 섞이지 않음. destructive-read라 같은 메시지를 양쪽이 중복 처리하지 않음.
+    // Internal implementation note.
+    // Internal implementation note.
     const items: ChannelItem[] = [];
     this.guard(
       () =>
@@ -407,7 +407,7 @@ export class Engine {
     );
   }
 
-  /** 현재 1:1 대화 + 코칭 반환. 읽음 처리. */
+  /** Internal implementation note. */
   open(): EngineResult & { chat: Chat | null; coaching?: CoachingPayload; cold?: boolean } {
     return this.tx(() => {
       pollAndIngest(this.tp, this.state, this.collectItem);
@@ -469,7 +469,7 @@ export class Engine {
     });
   }
 
-  // ── 알림/상태 ─────────────────────────────────────────────────────
+  // Internal implementation note.
   notificationState(): NotificationState {
     return this.tx(() => {
       pollAndIngest(this.tp, this.state, this.collectItem);

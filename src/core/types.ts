@@ -1,17 +1,17 @@
-// Shellmates 프로토콜 공용 타입 정의.
+// Internal implementation note.
 
 export const PROTOCOL_VERSION = "0.1";
 
 export type MatchingMode = "dating" | "builder" | "friend" | "founder";
 
-/** 외부에 공개 가능한 신원 (서명/암호화 공개키 포함) */
+/** Internal implementation note. */
 export interface PublicIdentity {
-  agent_id: string; // "agent_xxxxxxxx" (= sign_pub의 fingerprint)
-  sign_pub: string; // Ed25519 공개키 (base64url raw 32B)
-  box_pub: string; // X25519 공개키 (base64url raw 32B)
+  agent_id: string;
+  sign_pub: string;
+  box_pub: string;
 }
 
-/** 로컬에만 저장되는 비밀 신원 */
+/** Internal implementation note. */
 export interface Identity extends PublicIdentity {
   sign_priv: string; // Ed25519 private seed (base64url raw 32B)
   box_priv: string; // X25519 private scalar (base64url raw 32B)
@@ -24,13 +24,13 @@ export interface Proof {
   verified_at?: string;
 }
 
-/** 서명된 공개 프로필 카드 */
+/** Internal implementation note. */
 export interface ProfileCard {
   type: "profile_card";
   version: string;
   owner: string; // agent_id
-  sign_pub: string; // 서명 검증 + agent_id 바인딩 확인용
-  box_pub: string; // 타인이 owner에게 암호화할 때 사용
+  sign_pub: string;
+  box_pub: string;
   display_name?: string;
   country: string;
   languages: string[];
@@ -38,20 +38,20 @@ export interface ProfileCard {
   interests: string[];
   communication_style: string;
   matching_modes: MatchingMode[];
-  activity_hours?: string; // 예: "night" | "day" | "flexible"
+  activity_hours?: string;
   long_form?: boolean;
-  home_relay?: string; // (예약) federation 힌트 — 이 신원의 home relay URL. v1은 라우팅에 미사용.
+  home_relay?: string;
   profile_confidence: number; // 0..1
   created_at: string;
   expires_at: string;
   proofs: Proof[];
-  signature?: string; // canonicalize(card without signature) 에 대한 Ed25519 서명
+  signature?: string;
 }
 
-/** 디렉토리에서 가져온, 서명 검증을 거친 공개 카드 */
+/** Internal implementation note. */
 export type PublicProfileCard = ProfileCard;
 
-/** 온보딩 답변 → 프로필 빌드 입력 */
+/** Internal implementation note. */
 export interface ProfileAnswers {
   display_name?: string;
   country: string;
@@ -62,10 +62,10 @@ export interface ProfileAnswers {
   matching_modes?: MatchingMode[];
   activity_hours?: string;
   long_form?: boolean;
-  home_relay?: string; // (예약) federation 힌트
+  home_relay?: string;
 }
 
-/** 메시지 본문 암호화 봉투(payload) */
+/** Internal implementation note. */
 export interface CipherBlob {
   alg: "x25519-aesgcm";
   iv: string; // base64url
@@ -81,31 +81,31 @@ export type EnvelopeType =
   | "message"
   | "end";
 
-/** relay를 통해 전달되는 서명된 봉투 */
+/** Internal implementation note. */
 export interface Envelope {
   type: EnvelopeType;
   v: string;
-  id: string; // env_xxx (replay/dedupe 키)
-  from: string; // 발신 agent_id
-  to: string; // 수신 agent_id
+  id: string;
+  from: string;
+  to: string;
   conversation_id: string;
   created_at: string;
   nonce: string;
-  // intro 전용: 발신자 신원 + 프로필 요약(수신자가 검증/표시/회신 암호화에 사용)
+  // Internal implementation note.
   sender_identity?: PublicIdentity;
   sender_profile?: PublicProfileCard;
-  // intro/message 본문 암호문
+  // Internal implementation note.
   body?: CipherBlob;
-  signature?: string; // canonicalize(envelope without signature) 에 대한 서명
+  signature?: string;
 }
 
 export interface ChatMessage {
   msg_id: string;
   direction: "in" | "out";
   from: string; // agent_id
-  text: string; // 평문 (로컬 전용)
+  text: string;
   created_at: string;
-  flagged?: boolean; // 인젝션/연락처 등 안전 플래그
+  flagged?: boolean;
   flags?: string[];
 }
 
@@ -125,11 +125,11 @@ export interface Chat {
 export interface IntroRecord {
   intro_id: string;
   conversation_id: string;
-  // inbox: 발신자 / outbox: 대상
+  // Internal implementation note.
   peer: PublicIdentity;
-  to: string; // 수신 agent_id
+  to: string;
   profile: PublicProfileCard;
-  first_message?: string; // 평문(있으면)
+  first_message?: string;
   created_at: string;
   status: "pending" | "accepted" | "declined";
   direction: "in" | "out";
@@ -144,22 +144,22 @@ export interface NotificationState {
 }
 
 export interface Settings {
-  cold_days: number; // cold 대화 자동 보관 기준(일)
+  cold_days: number;
   default_modes: MatchingMode[];
 }
 
 export interface State {
   identity: Identity | null;
-  profile: ProfileCard | null; // 서명된 내 프로필(또는 초안)
+  profile: ProfileCard | null;
   published: boolean;
-  active_chat: Chat | null; // 1:1 — 항상 0 또는 1개
+  active_chat: Chat | null;
   past_chats: Chat[];
   inbox_intros: IntroRecord[];
-  outbox_intro: IntroRecord | null; // 1:1 — pending outbox도 0 또는 1개
-  blocked: string[]; // 내가 일방향 차단한 agent_id
-  no_resuggest: string[]; // 종료/거절로 재추천 제외할 agent_id
+  outbox_intro: IntroRecord | null;
+  blocked: string[];
+  no_resuggest: string[];
   reports: { agent_id: string; reason: string; at: string }[];
-  seen_env: string[]; // 처리한 envelope id (replay/dedupe)
+  seen_env: string[];
   notifications: NotificationState;
   settings: Settings;
 }
@@ -171,18 +171,18 @@ export interface MatchResult {
 }
 
 /**
- * 실시간 채널(PLAN3 §13) 전용 — pollAndIngest가 수신을 반영하면서 collector로 흘려보내는 원시 항목.
- * 데이팅 세션에서만 사용하며 본문(text)을 포함할 수 있다. collector를 넘기지 않으면 수집하지 않으므로
- * 코딩 세션의 thin MCP/데몬 경로(컨텍스트 방화벽)는 영향을 받지 않는다.
+ * Internal implementation note.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export interface ChannelItem {
   kind: "intro" | "accepted" | "declined" | "message" | "ended";
-  from: string; // 발신 agent_id
-  alias: string; // 표시명/별명/agent_id
+  from: string;
+  alias: string;
   chat_id: string | null; // conversation_id
-  ts: string; // ISO (ingest 시각)
-  text: string | null; // 본문(message/intro 첫 메시지), 없으면 null
-  flagged: boolean; // sanitize 안전 플래그(인젝션/연락처)
+  ts: string;
+  text: string | null;
+  flagged: boolean;
   flags: string[];
 }
 

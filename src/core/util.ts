@@ -1,19 +1,19 @@
-// 공용 유틸: base64url, 결정적(canonical) JSON, ID 생성, 시간 헬퍼.
+// Internal implementation note.
 import { randomBytes } from "node:crypto";
 
-/** Buffer/문자열 → base64url 문자열 */
+/** Internal implementation note. */
 export function b64url(buf: Buffer | Uint8Array): string {
   return Buffer.from(buf).toString("base64url");
 }
 
-/** base64url 문자열 → Buffer */
+/** Internal implementation note. */
 export function fromB64url(s: string): Buffer {
   return Buffer.from(s, "base64url");
 }
 
 /**
- * 서명 대상이 되는 결정적 JSON 직렬화.
- * 객체 키를 재귀적으로 정렬해 동일 내용이면 항상 동일 문자열이 되도록 한다.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function canonicalize(value: unknown): string {
   return JSON.stringify(sortDeep(value));
@@ -26,7 +26,7 @@ function sortDeep(value: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(obj).sort()) {
       const v = obj[key];
-      if (v === undefined) continue; // undefined 키는 직렬화에서 제외
+      if (v === undefined) continue;
       out[key] = sortDeep(v);
     }
     return out;
@@ -34,12 +34,12 @@ function sortDeep(value: unknown): unknown {
   return value;
 }
 
-/** prefix_<랜덤 hex> 형식의 ID 생성 */
+/** Internal implementation note. */
 export function newId(prefix: string, bytes = 8): string {
   return `${prefix}_${randomBytes(bytes).toString("hex")}`;
 }
 
-/** 랜덤 nonce (base64url) — replay 방지용 */
+/** Internal implementation note. */
 export function newNonce(bytes = 16): string {
   return b64url(randomBytes(bytes));
 }
@@ -59,13 +59,13 @@ export function isExpired(expiresAtIso: string, now: Date = new Date()): boolean
   return t <= now.getTime();
 }
 
-/** 문자열만 추려 정규화(비문자열 원소 방어 — 악성/손상 입력에도 throw 안 함) */
+/** Internal implementation note. */
 function normStrings(a: unknown): string[] {
   if (!Array.isArray(a)) return [];
   return a.filter((x): x is string => typeof x === "string");
 }
 
-/** 두 배열의 Jaccard 유사도(대소문자 무시, 0..1) */
+/** Internal implementation note. */
 export function jaccard(a: string[], b: string[]): number {
   const sa = new Set(normStrings(a).map((x) => x.toLowerCase().trim()).filter(Boolean));
   const sb = new Set(normStrings(b).map((x) => x.toLowerCase().trim()).filter(Boolean));
@@ -76,17 +76,17 @@ export function jaccard(a: string[], b: string[]): number {
   return union === 0 ? 0 : inter / union;
 }
 
-/** agent_id 형식 검증 (경로 traversal 방지: 파일 경로에 쓰기 전 항상 검증) */
+/** Internal implementation note. */
 export function isAgentId(s: unknown): s is string {
   return typeof s === "string" && /^agent_[0-9a-f]{16}$/.test(s);
 }
 
-/** prefix_<hex> 형식 ID 검증(envelope/chat/intro/msg) */
+/** Internal implementation note. */
 export function isPrefixedId(s: unknown, prefix: string): s is string {
   return typeof s === "string" && new RegExp(`^${prefix}_[0-9a-f]{8,64}$`).test(s);
 }
 
-/** 두 배열의 교집합(원본 a의 표기 유지) */
+/** Internal implementation note. */
 export function intersect(a: string[], b: string[]): string[] {
   const sb = new Set(normStrings(b).map((x) => x.toLowerCase().trim()));
   const seen = new Set<string>();

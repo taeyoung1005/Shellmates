@@ -31,9 +31,9 @@ test("sign/verify roundtrip + tamper detection", () => {
 test("E2E encrypt/decrypt roundtrip (X25519+AES-GCM)", () => {
   const a = generateIdentity();
   const b = generateIdentity();
-  const blob = encryptFor("secret message 한글", b.box_pub, a);
+  const blob = encryptFor("secret message with unicode text", b.box_pub, a);
   const pt = decryptFrom(blob, a.box_pub, b);
-  assert.equal(pt, "secret message 한글");
+  assert.equal(pt, "secret message with unicode text");
 });
 
 test("decrypt fails for wrong recipient / tampered ciphertext", () => {
@@ -60,9 +60,9 @@ test("envelope sign/verify + binding (impersonation blocked)", () => {
   };
   const env = signEnvelope(base, a);
   assert.ok(verifyEnvelope(env, a.sign_pub));
-  // 필드 변조 → 서명 불일치
+  // Internal implementation note.
   assert.ok(!verifyEnvelope({ ...env, to: "agent_other00" }, a.sign_pub));
-  // from을 타인으로 주장하지만 a키로 서명 → 바인딩 불일치로 거부
+  // Internal implementation note.
   const spoof = signEnvelope({ ...base, from: "agent_deadbeef" }, a);
   assert.ok(!verifyEnvelope(spoof, a.sign_pub));
 });

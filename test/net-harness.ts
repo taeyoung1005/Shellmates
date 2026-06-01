@@ -1,4 +1,4 @@
-// 네트워크 테스트 공용 하네스 — relay 서버를 별도 프로세스로 띄우고 HTTP 모드 엔진을 만든다.
+// Internal implementation note.
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,9 +18,9 @@ export async function startNet(opts: { token?: string; env?: Record<string, stri
   const token = opts.token ?? "test-token";
   const env: Record<string, string | undefined> = {
     TL_SERVER_DATA: serverData,
-    // 기본은 토큰 잠금. open 테스트는 opts.env로 덮어씀.
+    // Internal implementation note.
     TL_RELAY_ACCESS_TOKEN: token,
-    // 테스트 간 rate 간섭 방지: 기본은 넉넉히(특정 테스트에서만 낮춤)
+    // Internal implementation note.
     TL_RATE_MAX: "100000",
     TL_RATE_RELAY_POST_MAX: "100000",
     ...opts.env,
@@ -32,7 +32,7 @@ export async function startNet(opts: { token?: string; env?: Record<string, stri
 export function netEngine(net: NetCtx, name: string): Engine {
   return Engine.open({
     TL_HOME: join(net.root, name),
-    TL_NET: join(net.root, `${name}-net`), // 의도적으로 서로 다르게 → 공유 폴더 없음 증명
+    TL_NET: join(net.root, `${name}-net`),
     TL_SERVER: net.srv.baseUrl,
     TL_RELAY_ACCESS_TOKEN: net.token,
   } as NodeJS.ProcessEnv);
@@ -60,7 +60,7 @@ export const BOB_NET = {
   activity_hours: "night",
 };
 
-/** 두 HTTP 엔진을 init→profile→publish→intro→accept 까지 진행해 활성 1:1 대화 상태로. */
+/** Internal implementation note. */
 export function bringToChatNet(a: Engine, b: Engine, firstMessage = "hi over the wire"): { aId: string; bId: string } {
   a.init();
   const bId = b.init().agent_id!;
@@ -74,6 +74,6 @@ export function bringToChatNet(a: Engine, b: Engine, firstMessage = "hi over the
   const intro = b.inbox().intros[0]!;
   const acc = b.accept(intro.intro_id);
   if (!acc.ok) throw new Error("accept failed: " + acc.message);
-  a.open(); // accept 통지 수신
+  a.open();
   return { aId, bId };
 }

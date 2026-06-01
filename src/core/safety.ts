@@ -1,5 +1,5 @@
-// 안전 레이어 — 수신 메시지 sanitize(프롬프트 인젝션/연락처 탐지). 본문은 변형하지 않고 플래그만 부여.
-// 핵심 원칙: 상대 메시지는 untrusted input. 어떤 경우에도 도구 실행/시스템 지시로 해석하지 않는다.
+// Internal implementation note.
+// Internal implementation note.
 
 const INJECTION_PATTERNS: { label: string; re: RegExp }[] = [
   { label: "ignore-previous", re: /ignore\s+(all\s+|the\s+)?previous/i },
@@ -24,10 +24,10 @@ const CONTACT_PATTERNS: { type: string; re: RegExp }[] = [
   { type: "url", re: /\bhttps?:\/\/[^\s]+/i },
 ];
 
-// 제어문자(탭 \t, 개행 \n\r 제외) 제거용 — 리터럴 제어문자 대신 이스케이프 문자열로 구성.
+// Internal implementation note.
 const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]", "g");
-// 인젝션 탐지 회피용 invisible/형식문자(zero-width·word-joiner·BOM·bidi). 탐지 전 제거해 "ig<ZWJ>nore" 류 회피 차단.
-// (표시 텍스트는 변형하지 않는다 — 탐지 프로브에만 적용.)
+// Internal implementation note.
+// Internal implementation note.
 const ZW_FORMAT = new RegExp("[\\u200B-\\u200F\\u2060\\uFEFF\\u202A-\\u202E\\u2066-\\u2069]", "g");
 
 export interface SanitizeResult {
@@ -37,7 +37,7 @@ export interface SanitizeResult {
 }
 
 export function detectInjection(text: string): string[] {
-  // invisible 형식문자를 제거한 프로브로 매칭 → "ig<ZWJ>nore previous" 류 토큰 분할 회피 차단.
+  // Internal implementation note.
   const probe = String(text).replace(ZW_FORMAT, "");
   const found: string[] = [];
   for (const { label, re } of INJECTION_PATTERNS) {
@@ -61,8 +61,8 @@ export function detectContact(text: string): ContactHit[] {
 }
 
 /**
- * 수신 메시지 정리: 제어문자 제거 + 길이 제한 + 위험 플래그.
- * 본문 텍스트 자체는 (표시를 위해) 보존하고, 위험 신호는 flags로만 표기한다.
+ * Internal implementation note.
+ * Internal implementation note.
  */
 export function sanitizeIncoming(text: string): SanitizeResult {
   const cleaned = String(text).replace(CONTROL_CHARS, "").slice(0, 8000);

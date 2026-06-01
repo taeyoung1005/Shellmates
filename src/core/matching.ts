@@ -1,4 +1,4 @@
-// 로컬 매칭 — 내 카드와 상대 카드의 호환도(0..100) + 사유를 계산. 중앙 서버 없이 전부 로컬.
+// Internal implementation note.
 import type { MatchResult, ProfileCard, PublicProfileCard } from "./types.js";
 import { intersect, jaccard } from "./util.js";
 
@@ -11,7 +11,7 @@ const W = {
   hours: 0.1,
 } as const;
 
-/** 단일 후보 점수 계산 */
+/** Internal implementation note. */
 export function scoreMatch(mine: ProfileCard, theirs: PublicProfileCard): MatchResult {
   const interestsSim = jaccard(mine.interests, theirs.interests);
   const stacksSim = jaccard(mine.stacks, theirs.stacks);
@@ -30,7 +30,7 @@ export function scoreMatch(mine: ProfileCard, theirs: PublicProfileCard): MatchR
     W.style * styleSim +
     W.hours * hoursSim;
 
-  // 상대 프로필 신뢰도를 약하게 반영
+  // Internal implementation note.
   raw *= 0.7 + 0.3 * clamp01(theirs.profile_confidence);
 
   const score = Math.round(clamp01(raw) * 100);
@@ -38,19 +38,19 @@ export function scoreMatch(mine: ProfileCard, theirs: PublicProfileCard): MatchR
   const reasons: string[] = [];
   const sharedInterests = intersect(mine.interests, theirs.interests);
   const sharedStacks = intersect(mine.stacks, theirs.stacks);
-  if (sharedInterests.length) reasons.push(`공통 관심사: ${sharedInterests.slice(0, 4).join(", ")}`);
-  if (sharedStacks.length) reasons.push(`공통 스택: ${sharedStacks.slice(0, 4).join(", ")}`);
-  if (langShared.length) reasons.push(`공통 언어: ${langShared.join(", ")}`);
-  if (styleSim) reasons.push(`대화 스타일이 비슷함 (${mine.communication_style})`);
-  if (hoursSim) reasons.push(`활동 시간대가 비슷함 (${mine.activity_hours})`);
-  if (modeShared.length) reasons.push(`매칭 목적 일치: ${modeShared.join(", ")}`);
-  if (reasons.length === 0) reasons.push("뚜렷한 공통점은 적지만 탐색해볼 만함");
+  if (sharedInterests.length) reasons.push(`Shared interests: ${sharedInterests.slice(0, 4).join(", ")}`);
+  if (sharedStacks.length) reasons.push(`Shared stacks: ${sharedStacks.slice(0, 4).join(", ")}`);
+  if (langShared.length) reasons.push(`Shared languages: ${langShared.join(", ")}`);
+  if (styleSim) reasons.push(`Similar communication style (${mine.communication_style})`);
+  if (hoursSim) reasons.push(`Similar activity hours (${mine.activity_hours})`);
+  if (modeShared.length) reasons.push(`Matching goals overlap: ${modeShared.join(", ")}`);
+  if (reasons.length === 0) reasons.push("Few obvious overlaps, but worth exploring");
 
   return { card: theirs, score, reasons };
 }
 
 /**
- * 후보 목록 매칭: self/blocked/no_resuggest/매칭목적 불일치 제외 후 점수순 정렬.
+ * Internal implementation note.
  */
 export function rankMatches(
   mine: ProfileCard,
@@ -61,9 +61,9 @@ export function rankMatches(
   const noRe = new Set(opts.noResuggest ?? []);
   const results: MatchResult[] = [];
   for (const c of candidates) {
-    if (c.owner === (opts.myAgentId ?? mine.owner)) continue; // 자기 자신 제외
+    if (c.owner === (opts.myAgentId ?? mine.owner)) continue;
     if (blocked.has(c.owner) || noRe.has(c.owner)) continue;
-    if (intersect(mine.matching_modes, c.matching_modes).length === 0) continue; // 매칭 목적 겹쳐야 노출
+    if (intersect(mine.matching_modes, c.matching_modes).length === 0) continue;
     results.push(scoreMatch(mine, c));
   }
   results.sort((a, b) => b.score - a.score);

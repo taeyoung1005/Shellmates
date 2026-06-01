@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "comment": "패키징/배포용 빌드 — src만 컴파일(테스트 파일은 dist/패키지에 포함하지 않음).",
+  "comment": "Build configuration for packaging and deployment; compile src only, excluding tests from dist/package output.",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

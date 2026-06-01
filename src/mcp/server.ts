@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-// TerminalLove MCP 서버 — thin & 컨텍스트-세이프.
-// 컨텍스트 방화벽(§10.4): 메인 코딩 세션에 붙는 이 MCP는 메시지 본문/코칭을 절대 노출하지 않는다.
-// 오직 (1) 알림 카운트/이벤트/발신 alias, (2) 별도 세션을 여는 방법 안내만 제공한다.
-import { pathToFileURL } from "node:url";
+// Shellmates MCP server: thin and context-safe.
+// The coding-session MCP never exposes message bodies or coaching.
+// It returns only notification counts/events/aliases and instructions for opening the separate session.
+import { isMainEntry } from "../core/entry.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Engine } from "../core/engine.js";
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "terminallove", version: "0.1.0" });
+  const server = new McpServer({ name: "shellmates", version: "0.1.0" });
 
   server.registerTool(
-    "terminallove_status",
+    "shellmates_status",
     {
-      title: "TerminalLove 상태(카운트만)",
+      title: "Shellmates status (counts only)",
       description:
-        "TerminalLove 알림 카운트/이벤트/발신 alias 만 반환합니다. 메시지 본문·코칭은 포함하지 않습니다(컨텍스트 방화벽). 소개팅 대화 내용은 이 코딩 세션에 절대 들어오지 않습니다.",
+        "Returns Shellmates notification counts, events, and sender aliases only. It never includes message bodies or coaching.",
       inputSchema: {},
     },
     async () => {
       const engine = Engine.open();
       if (!engine.agentId) {
-        return { content: [{ type: "text", text: "TerminalLove: 신원 없음. 별도 세션에서 `tl init` 하세요." }] };
+        return { content: [{ type: "text", text: "Shellmates: no identity yet. Run `shellmates init` in the separate session." }] };
       }
       const n = engine.notificationState();
       const s = engine.status();
@@ -31,18 +31,18 @@ export function buildServer(): McpServer {
   );
 
   server.registerTool(
-    "terminallove_open_session",
+    "shellmates_open_session",
     {
-      title: "TerminalLove 세션 여는 법",
+      title: "How to open Shellmates",
       description:
-        "TerminalLove 대화는 코딩 컨텍스트와 분리된 별도 세션에서 진행합니다. 이 도구는 여는 방법 안내만 반환하며 대화 내용은 포함하지 않습니다.",
+        "Shellmates conversations happen in a separate session outside the coding context. This tool returns open instructions only, never conversation content.",
       inputSchema: {},
     },
     async () => ({
       content: [
         {
           type: "text",
-          text: "별도 터미널에서 `npm run cli`(또는 `tl`)를 실행해 대화하세요. 메시지 본문·코칭은 컨텍스트 방화벽 정책상 이 코딩 세션에 표시되지 않습니다.",
+          text: "Open a separate terminal and run `shellmates` or `sm`. Message bodies and coaching are intentionally not shown in this coding session.",
         },
       ],
     }),
@@ -55,10 +55,10 @@ async function main(): Promise<void> {
   const server = buildServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write("TerminalLove MCP (thin, context-safe) connected via stdio.\n");
+  process.stderr.write("Shellmates MCP (thin, context-safe) connected via stdio.\n");
 }
 
-const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = isMainEntry(import.meta.url);
 if (isMain) {
   main().catch((e) => {
     console.error(e);

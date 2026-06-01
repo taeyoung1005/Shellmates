@@ -59,10 +59,16 @@ export function isExpired(expiresAtIso: string, now: Date = new Date()): boolean
   return t <= now.getTime();
 }
 
+/** 문자열만 추려 정규화(비문자열 원소 방어 — 악성/손상 입력에도 throw 안 함) */
+function normStrings(a: unknown): string[] {
+  if (!Array.isArray(a)) return [];
+  return a.filter((x): x is string => typeof x === "string");
+}
+
 /** 두 배열의 Jaccard 유사도(대소문자 무시, 0..1) */
 export function jaccard(a: string[], b: string[]): number {
-  const sa = new Set(a.map((x) => x.toLowerCase().trim()).filter(Boolean));
-  const sb = new Set(b.map((x) => x.toLowerCase().trim()).filter(Boolean));
+  const sa = new Set(normStrings(a).map((x) => x.toLowerCase().trim()).filter(Boolean));
+  const sb = new Set(normStrings(b).map((x) => x.toLowerCase().trim()).filter(Boolean));
   if (sa.size === 0 && sb.size === 0) return 0;
   let inter = 0;
   for (const x of sa) if (sb.has(x)) inter++;
@@ -82,10 +88,10 @@ export function isPrefixedId(s: unknown, prefix: string): s is string {
 
 /** 두 배열의 교집합(원본 a의 표기 유지) */
 export function intersect(a: string[], b: string[]): string[] {
-  const sb = new Set(b.map((x) => x.toLowerCase().trim()));
+  const sb = new Set(normStrings(b).map((x) => x.toLowerCase().trim()));
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const x of a) {
+  for (const x of normStrings(a)) {
     const k = x.toLowerCase().trim();
     if (sb.has(k) && !seen.has(k)) {
       seen.add(k);

@@ -34,14 +34,43 @@ test("cli parse handles flags, positionals, quoted text, --json", () => {
   assert.equal(p.json, true);
 });
 
+test("cli accepts /shellmates and shellmates prefixes", () => {
+  assert.equal(parse(["/shellmates", "scan"]).command, "scan");
+  assert.equal(parse(["shellmates", "intro", "agent_x", "hi"]).command, "intro");
+  assert.equal(parse(["shellmates", "intro", "agent_x", "hi"]).positionals[0], "agent_x");
+  assert.equal(parse(["scan"]).command, "scan");
+  assert.equal(parse(["/shellmates"]).command, "help");
+});
+
 test("cli intro without target returns usage", () => {
   const root = tempRoot();
   const e = engineFor(join(root, "a"), join(root, "net"));
-  assert.match(dispatch(e, parse(["intro"])).human, /사용법/);
+  assert.match(dispatch(e, parse(["intro"])).human, /Usage/);
 });
 
 test("cli help lists commands", () => {
   const root = tempRoot();
   const e = engineFor(join(root, "a"), join(root, "net"));
   assert.match(dispatch(e, parse(["help"])).human, /init/);
+});
+
+test("cli poll command returns ingest counts (body-free)", () => {
+  const root = tempRoot();
+  const e = engineFor(join(root, "a"), join(root, "net"));
+  e.init();
+  const out = dispatch(e, parse(["poll"]));
+  const r = out.result as { ingested: number; rejected: number; events: string[] };
+  assert.equal(typeof r.ingested, "number");
+  assert.equal(typeof r.rejected, "number");
+  assert.match(out.human, /polled — ingested=\d+ rejected=\d+/);
+});
+
+test("cli unknown command is flagged (nonzero) instead of silently showing help", () => {
+  const root = tempRoot();
+  const e = engineFor(join(root, "a"), join(root, "net"));
+  const out = dispatch(e, parse(["bogusxyz"]));
+  assert.equal(out.unknown, true);
+  assert.match(out.human, /Unknown command/);
+  // help must not be marked unknown.
+  assert.notEqual(dispatch(e, parse(["help"])).unknown, true);
 });

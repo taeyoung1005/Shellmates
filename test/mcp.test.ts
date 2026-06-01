@@ -26,9 +26,9 @@ test("MCP exposes ONLY context-safe tools (firewall) and status returns counts o
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();
     // 정확히 두 개의 컨텍스트-세이프 도구만 존재해야 함 (본문/대화/코칭 도구 없음)
-    assert.deepEqual(names, ["terminallove_open_session", "terminallove_status"]);
+    assert.deepEqual(names, ["shellmates_open_session", "shellmates_status"]);
 
-    const res = (await client.callTool({ name: "terminallove_status", arguments: {} })) as {
+    const res = (await client.callTool({ name: "shellmates_status", arguments: {} })) as {
       content: { type: string; text: string }[];
     };
     const text = res.content.map((c) => c.text).join("\n");

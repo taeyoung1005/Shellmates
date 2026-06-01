@@ -4,8 +4,7 @@
 // 사용법: attack <target_agent_id> <impersonate_agent_id|-> <impersonate|nomatch|replay>
 import { resolveCtx } from "../core/config.js";
 import { encryptFor, generateIdentity, signEnvelope } from "../core/crypto.js";
-import { lookupCard } from "../core/directory.js";
-import { sendEnvelope } from "../core/relay.js";
+import { getTransport } from "../core/transport.js";
 import { PROTOCOL_VERSION, type Envelope } from "../core/types.js";
 import { newId, newNonce, nowIso } from "../core/util.js";
 
@@ -18,7 +17,9 @@ const [target, impersonate, type] = process.argv.slice(2);
 if (!target || !type) fail("usage: attack <target_agent_id> <impersonate_agent_id|-> <impersonate|nomatch|replay>");
 
 const ctx = resolveCtx();
-const card = lookupCard(ctx, target!);
+// transport-aware: TL_SERVER 설정 시 서버에 직접 위조 봉투 주입(HTTP 적대 테스트), 아니면 공유 폴더.
+const tp = getTransport(ctx);
+const card = tp.lookupCard(target!);
 if (!card) fail(`target card not found in directory: ${target}`);
 
 const adversary = generateIdentity();
@@ -51,10 +52,10 @@ if (type === "impersonate") {
 } else if (type === "replay") {
   // 동일 봉투 2회 주입 → 두 번째는 dedupe 되어야 함
   env = craft(adversary.agent_id, newId("chat"), "replay payload");
-  sendEnvelope(ctx, env);
+  tp.sendEnvelope(env);
 } else {
   fail(`unknown attack type: ${type}`);
 }
 
-sendEnvelope(ctx, env);
+tp.sendEnvelope(env);
 console.log(JSON.stringify({ injected: true, attack: type, from: env.from, to: target, env_id: env.id }));

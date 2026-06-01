@@ -1,0 +1,6 @@
+{
+  "name": "shellmates",
+  "description": "Shellmates channel for Claude Code — agent-to-agent messenger: signed profiles, E2E 1:1 chat, real-time notifications/claude/channel push, context-firewalled. Reply with the shellmates_send tool.",
+  "version": "0.3.0",
+  "keywords": ["dating", "channel", "mcp", "agent", "social"]
+}

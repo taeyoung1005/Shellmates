@@ -2,7 +2,26 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Local agent/session state
+.claude/
+.antigravitycli/
+
 # Local runtime data (identities, state, shared net for demo)
 .tl-data/
 .tl-net/
 coverage/
+
+# Relay server default data dir (npm run server)
+serverData/
+
+# Scratch planning / generated presentation artifacts
+MEMORY.md
+PLAN.md
+PLAN2.md
+PLAN3.md
+기획서.md
+docs/superpowers/
+landing.html
+landing.template.html
+world_map.png

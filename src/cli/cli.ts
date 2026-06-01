@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// TerminalLove CLI — "별도 세션" 표면. /dating 명령어를 원샷/REPL/--json 으로 실행.
-// 컨텍스트 방화벽: 이 표면(대화·코칭)은 코딩 세션과 분리된 별도 프로세스에서 돈다.
+// Shellmates CLI for the isolated conversation surface.
 import { createInterface } from "node:readline";
-import { pathToFileURL } from "node:url";
+import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
 import type { CoachingPayload, IntroRecord, MatchResult, ProfileAnswers, MatchingMode } from "../core/types.js";
 
@@ -20,7 +19,9 @@ export function parse(argv: string[]): Parsed {
     if (a === "--json") json = true;
     else rest.push(a);
   }
-  const command = rest.shift() ?? "help";
+  // Accept `/shellmates scan`, `shellmates scan`, and bare `scan`.
+  let command = rest.shift() ?? "help";
+  if (command === "/shellmates" || command === "shellmates") command = rest.shift() ?? "help";
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
@@ -50,7 +51,7 @@ function csv(v: string | boolean | undefined): string[] | undefined {
 }
 
 function renderMatches(matches: MatchResult[]): string {
-  if (matches.length === 0) return "  (후보 없음)";
+  if (matches.length === 0) return "  (no candidates)";
   return matches
     .map((m, i) => {
       const c = m.card;
@@ -65,7 +66,7 @@ function renderMatches(matches: MatchResult[]): string {
 }
 
 function renderIntros(intros: IntroRecord[]): string {
-  if (intros.length === 0) return "  (받은 intro 없음)";
+  if (intros.length === 0) return "  (no received intros)";
   return intros
     .map((it, i) => {
       const name = it.profile.display_name ?? it.peer.agent_id;
@@ -80,8 +81,8 @@ function renderCoaching(c: CoachingPayload): string {
   if (c.warnings.length) lines.push("  ⚠ " + c.warnings.join("\n  ⚠ "));
   lines.push("  Coach:");
   for (const g of c.guidance) lines.push("    - " + g);
-  lines.push("  Suggested reply:");
-  lines.push("    " + c.suggested_reply);
+  lines.push("  Reply approach:");
+  lines.push("    " + c.reply_strategy);
   return lines.join("\n");
 }
 
@@ -98,37 +99,40 @@ function profileAnswersFromFlags(flags: Record<string, string | boolean>): Profi
   if (modes) a.matching_modes = modes as MatchingMode[];
   if (typeof flags.hours === "string") a.activity_hours = flags.hours;
   if (flags.longform) a.long_form = true;
+  if (typeof flags["home-relay"] === "string") a.home_relay = flags["home-relay"];
   return a;
 }
 
-const HELP = `TerminalLove — /dating 명령어
-  init                          신원(키페어) 생성
-  whoami                        내 agent_id / 프로필 요약
-  profile [--name --country --langs a,b --stacks a,b --interests a,b --style ".." --modes a,b --hours night --longform]
-  publish | unpublish           프로필 디렉토리 게시/철회
-  export-profile [--out path]   서명된 프로필 파일로 내보내기
-  import-profile <file>         서명된 프로필 가져오기(검증 후 디렉토리 추가)
-  invite                        초대 링크 생성
-  scan                          매칭 후보 검색(로컬 계산)
-  intro <agent_id> ["메시지"]    소개 요청 (활성 대화 없을 때만)
-  cancel                        보낸 intro 취소
-  inbox                         받은 intro 목록
+const HELP = `Shellmates — /shellmates commands
+  init                          Create identity keys
+  whoami                        Show agent_id and profile summary
+  profile [--name --country --langs a,b --stacks a,b --interests a,b --style ".." --modes a,b --hours night --longform --home-relay url]
+  profile --from-agent          Draft profile from local agent records; review before publish
+  publish | unpublish           Publish or remove profile from the directory
+  export-profile [--out path]   Export signed profile card
+  import-profile <file>         Import a signed profile card
+  invite                        Create invite link
+  scan                          Search match candidates locally
+  intro <agent_id> ["message"]   Send intro when no active chat exists
+  cancel                        Cancel pending outbound intro
+  poll                          Ingest relay envelopes now (counts only)
+  inbox                         List received intros
   accept <intro_id> | decline <intro_id>
-  open                          현재 1:1 대화 + 코치
-  send "메시지"                  현재 대화에 전송
-  reply                         답장 코칭(전송은 send로)
-  coach "초안"                   작성 초안 코칭
-  alias <별명>                   현재 상대 별명
-  end [--block]                 대화 종료(언매치) [+차단]
-  block [agent_id]              일방향 차단(기본=현재 상대)
-  report <agent_id> [사유]       신고
-  backup-key [--out path] | import-key <file> | rotate-key   키 관리
-  status | notify               상태 / 알림
+  open                          Open current 1:1 chat and coaching
+  send "message"                Send to current chat
+  reply                         Reply coaching; send separately
+  coach "draft"                 Coach a draft
+  alias <name>                  Set current peer alias
+  end [--block]                 End chat, optionally block
+  block [agent_id]              One-way block; defaults to current peer
+  report <agent_id> [reason]    Report peer
+  backup-key [--out path] [--passphrase p] | import-key <file> [--passphrase p] | rotate-key
+  status | notify               Status / notifications
   help | exit
-  (전역: --json 기계판독 출력. 본문/코칭은 기본 레다크션, --include-bodies 로 포함)`;
+  Global: --json emits machine-readable output. Bodies/coaching are redacted unless --include-bodies is set.`;
 
-// 명령 실행. 반환: { result, human }
-export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: string } {
+// Execute a parsed command. unknown=true makes one-shot mode exit nonzero.
+export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: string; unknown?: boolean } {
   const { command, positionals, flags } = p;
   const arg0 = positionals[0];
   switch (command) {
@@ -140,14 +144,33 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
       const prof = engine.getProfile();
       const id = engine.agentId;
       const human = id
-        ? `agent_id: ${id}\nprofile: ${prof ? (prof.display_name ?? "(이름없음)") + " · " + prof.country + " · " + prof.stacks.join(", ") : "(없음)"}\npublished: ${engine.state.published}`
-        : "신원이 없습니다. init 하세요.";
+        ? `agent_id: ${id}\nprofile: ${prof ? (prof.display_name ?? "(unnamed)") + " · " + prof.country + " · " + prof.stacks.join(", ") : "(none)"}\npublished: ${engine.state.published}`
+        : "No identity yet. Run init.";
       return { result: { agent_id: id, profile: prof, published: engine.state.published }, human };
     }
     case "profile": {
-      const r = engine.makeProfile(profileAnswersFromFlags(flags));
+      let answers = profileAnswersFromFlags(flags);
+      let observeNote = "";
+      // --from-agent drafts from local records, then explicit flags override.
+      if (flags["from-agent"] === true) {
+        const obs = engine.observeForProfile();
+        const merged: ProfileAnswers = {
+          country: answers.country && answers.country !== "Korea" ? answers.country : obs.draft.country || answers.country,
+          languages: csv(flags.langs) ?? (obs.draft.languages.length ? obs.draft.languages : answers.languages),
+          stacks: csv(flags.stacks) ?? obs.draft.stacks,
+          interests: csv(flags.interests) ?? obs.draft.interests,
+          communication_style: typeof flags.style === "string" ? flags.style : obs.draft.communication_style,
+          matching_modes: csv(flags.modes) ? (csv(flags.modes) as MatchingMode[]) : obs.draft.matching_modes,
+        };
+        if (typeof flags.name === "string") merged.display_name = flags.name;
+        if (typeof flags.hours === "string") merged.activity_hours = flags.hours;
+        else if (obs.draft.activity_hours) merged.activity_hours = obs.draft.activity_hours;
+        answers = merged;
+        observeNote = `\n  (observed: ${obs.source}, files=${obs.scannedFiles}, chars=${obs.chars} — ${obs.note})`;
+      }
+      const r = engine.makeProfile(answers);
       const human = r.ok && r.card
-        ? `${r.message}\n  ${r.card.display_name ?? r.card.owner} · ${r.card.country} · ${r.card.stacks.join(", ")} · 신뢰도 ${Math.round(r.card.profile_confidence * 100)}%`
+        ? `${r.message}${observeNote}\n  ${r.card.display_name ?? r.card.owner} · ${r.card.country || "(country unset)"} · ${r.card.stacks.join(", ") || "(stack unset)"} · interests ${r.card.interests.join(", ") || "-"} · confidence ${Math.round(r.card.profile_confidence * 100)}%\n  Review it, then run publish.`
         : r.message;
       return { result: r, human };
     }
@@ -158,16 +181,21 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
     case "export-profile":
       return wrap(engine.exportProfile(typeof flags.out === "string" ? flags.out : undefined));
     case "import-profile": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: import-profile <file>" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: import-profile <file>" };
       return wrap(engine.importProfile(arg0));
     }
     case "invite":
       return wrap(engine.invite());
     case "backup-key":
-      return wrap(engine.backupKey(typeof flags.out === "string" ? flags.out : undefined));
+      return wrap(
+        engine.backupKey(
+          typeof flags.out === "string" ? flags.out : undefined,
+          typeof flags.passphrase === "string" ? flags.passphrase : undefined,
+        ),
+      );
     case "import-key": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: import-key <file>" };
-      return wrap(engine.importKey(arg0));
+      if (!arg0) return { result: { ok: false }, human: "Usage: import-key <file> [--passphrase pass]" };
+      return wrap(engine.importKey(arg0, typeof flags.passphrase === "string" ? flags.passphrase : undefined));
     }
     case "rotate-key":
       return wrap(engine.rotateKey());
@@ -176,9 +204,15 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
       return { result: r, human: `${r.message}\n${renderMatches(r.matches)}` };
     }
     case "intro": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: intro <agent_id> [\"메시지\"]" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: intro <agent_id> [\"message\"]" };
       const r = engine.intro(arg0, positionals[1]);
       return wrap(r);
+    }
+    case "poll": {
+      // Ingest inbound envelopes now; output remains count-only.
+      const r = engine.poll();
+      const human = `polled — ingested=${r.ingested} rejected=${r.rejected}` + (r.events.length ? ` events=${r.events.join(", ")}` : "");
+      return { result: r, human };
     }
     case "cancel":
       return wrap(engine.cancel());
@@ -187,27 +221,27 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
       return { result: r, human: `${r.message}\n${renderIntros(r.intros)}` };
     }
     case "accept": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: accept <intro_id>" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: accept <intro_id>" };
       return wrap(engine.accept(arg0));
     }
     case "decline": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: decline <intro_id>" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: decline <intro_id>" };
       return wrap(engine.decline(arg0));
     }
     case "open": {
       const r = engine.open();
       if (!r.chat) return { result: r, human: r.message };
-      const lines: string[] = [`대화 상대: ${r.chat.alias ?? r.chat.partner_profile.display_name ?? r.chat.partner.agent_id} (${r.chat.partner.agent_id})`];
-      if (r.cold) lines.push("  (cold: 오래 응답이 없습니다. [end/block/계속])");
+      const lines: string[] = [`Peer: ${r.chat.alias ?? r.chat.partner_profile.display_name ?? r.chat.partner.agent_id} (${r.chat.partner.agent_id})`];
+      if (r.cold) lines.push("  (cold: no recent response. Consider end/block/continue.)");
       for (const m of r.chat.messages.slice(-12)) {
-        const who = m.direction === "in" ? (r.chat.alias ?? "상대") : "나";
+        const who = m.direction === "in" ? (r.chat.alias ?? "peer") : "me";
         lines.push(`  ${who}: ${m.text}${m.flagged ? "  ⚠[" + (m.flags ?? []).join(",") + "]" : ""}`);
       }
       if (r.coaching) lines.push(renderCoaching(r.coaching));
       return { result: r, human: lines.join("\n") };
     }
     case "send": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: send \"메시지\"" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: send \"message\"" };
       return wrap(engine.send(positionals.join(" ")));
     }
     case "reply": {
@@ -215,12 +249,12 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
       return { result: r, human: r.coaching ? renderCoaching(r.coaching) : r.message };
     }
     case "coach": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: coach \"초안\"" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: coach \"draft\"" };
       const r = engine.coach(positionals.join(" "));
       return { result: r, human: r.coaching ? renderCoaching(r.coaching) : r.message };
     }
     case "alias": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: alias <별명>" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: alias <name>" };
       return wrap(engine.alias(arg0));
     }
     case "end":
@@ -228,7 +262,7 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
     case "block":
       return wrap(engine.block(arg0));
     case "report": {
-      if (!arg0) return { result: { ok: false }, human: "사용법: report <agent_id> [사유]" };
+      if (!arg0) return { result: { ok: false }, human: "Usage: report <agent_id> [reason]" };
       return wrap(engine.report(arg0, positionals.slice(1).join(" ")));
     }
     case "status": {
@@ -237,12 +271,13 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
     }
     case "notify": {
       const n = engine.notificationState();
-      const human = n.unread > 0 ? `🔔 ${n.unread}건 — ${n.last_from_alias ?? ""} (${n.last_event})` : "새 알림 없음";
+      const human = n.unread > 0 ? `🔔 ${n.unread} unread — ${n.last_from_alias ?? ""} (${n.last_event})` : "No new notifications";
       return { result: n, human };
     }
     case "help":
-    default:
       return { result: { ok: true }, human: HELP };
+    default:
+      return { result: { ok: false, error: "unknown_command", command }, human: `Unknown command: ${command}\n\n${HELP}`, unknown: true };
   }
 }
 
@@ -251,8 +286,8 @@ function wrap(r: { ok: boolean; message: string }): { result: unknown; human: st
 }
 
 /**
- * --json 출력 시 컨텍스트 방화벽: 메시지 본문/코칭/첫 메시지를 기본 레다크션.
- * --include-bodies 플래그가 있을 때만 원문 포함(별도 세션 TUI 등 명시적 용도).
+ * JSON output redacts message bodies, coaching, and first messages by default.
+ * --include-bodies includes them for explicit separate-session use.
  */
 export function redactForJson(result: unknown, includeBodies: boolean): unknown {
   if (includeBodies) return result;
@@ -280,14 +315,14 @@ export function redactForJson(result: unknown, includeBodies: boolean): unknown 
 }
 
 async function repl(engine: Engine): Promise<void> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "/dating > " });
-  console.log("TerminalLove REPL — 'help'로 명령 목록, 'exit'로 종료.");
+  const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "/shellmates > " });
+  console.log("Shellmates REPL — type 'help' for commands, 'exit' to quit.");
   rl.prompt();
   for await (const line of rl) {
     const cmd = line.trim();
     if (cmd === "exit" || cmd === "quit") break;
     if (cmd) {
-      // 간단 토크나이저: 따옴표 구간 보존
+      // Simple tokenizer that preserves quoted spans.
       const tokens = cmd.match(/"[^"]*"|\S+/g)?.map((t) => t.replace(/^"|"$/g, "")) ?? [];
       const out = dispatch(engine, parse(tokens));
       console.log(out.human);
@@ -311,10 +346,12 @@ async function main(): Promise<void> {
   } else {
     console.log(out.human);
   }
+  // Unknown commands exit nonzero so script typos do not look successful.
+  if (out.unknown) process.exitCode = 2;
 }
 
-// 직접 실행 시에만 main (테스트에서 import 가능하도록)
-const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+// Run main only for direct execution.
+const isMain = isMainEntry(import.meta.url);
 if (isMain) {
   main().catch((e) => {
     console.error(e);

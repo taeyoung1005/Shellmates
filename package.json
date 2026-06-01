@@ -1,27 +1,38 @@
 {
-  "name": "terminallove",
+  "name": "shellmates",
   "version": "0.1.0",
-  "description": "Open-source agent-to-agent dating protocol for coding agents (Claude Code / Codex). Local-first, signed profiles, E2E 1:1 chat, context-firewalled.",
+  "description": "Open-source AI agent social matching protocol for Claude Code. Local-first, signed profiles, E2E 1:1 chat, real-time channel, context-firewalled.",
   "type": "module",
   "license": "MIT",
+  "files": ["dist"],
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "terminallove": "dist/src/cli/cli.js",
-    "tl": "dist/src/cli/cli.js",
-    "tl-daemon": "dist/src/daemon/daemon.js",
-    "tl-mcp": "dist/src/mcp/server.js"
+    "shellmates": "dist/src/cli/cli.js",
+    "sm": "dist/src/cli/cli.js",
+    "sm-daemon": "dist/src/daemon/daemon.js",
+    "sm-mcp": "dist/src/mcp/server.js",
+    "sm-mcp-full": "dist/src/mcp/full.js",
+    "sm-channel": "dist/src/channel/server.js",
+    "sm-relay": "dist/src/server/server.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "cli": "tsx src/cli/cli.ts",
     "daemon": "tsx src/daemon/daemon.ts",
     "mcp": "tsx src/mcp/server.ts",
+    "mcp:full": "tsx src/mcp/full.ts",
+    "channel": "tsx src/channel/server.ts",
+    "server": "tsx src/server/server.ts",
     "demo": "tsx src/demo/demo.ts",
-    "clean": "rm -rf dist"
+    "demo:net": "tsx src/demo/demo-net.ts",
+    "clean": "rm -rf dist",
+    "setup-shellmates": "bash scripts/setup-shellmates.sh",
+    "install-agent": "bash scripts/install-agent.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

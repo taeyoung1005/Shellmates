@@ -26,6 +26,9 @@ const CONTACT_PATTERNS: { type: string; re: RegExp }[] = [
 
 // 제어문자(탭 \t, 개행 \n\r 제외) 제거용 — 리터럴 제어문자 대신 이스케이프 문자열로 구성.
 const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]", "g");
+// 인젝션 탐지 회피용 invisible/형식문자(zero-width·word-joiner·BOM·bidi). 탐지 전 제거해 "ig<ZWJ>nore" 류 회피 차단.
+// (표시 텍스트는 변형하지 않는다 — 탐지 프로브에만 적용.)
+const ZW_FORMAT = new RegExp("[\\u200B-\\u200F\\u2060\\uFEFF\\u202A-\\u202E\\u2066-\\u2069]", "g");
 
 export interface SanitizeResult {
   text: string;
@@ -34,9 +37,11 @@ export interface SanitizeResult {
 }
 
 export function detectInjection(text: string): string[] {
+  // invisible 형식문자를 제거한 프로브로 매칭 → "ig<ZWJ>nore previous" 류 토큰 분할 회피 차단.
+  const probe = String(text).replace(ZW_FORMAT, "");
   const found: string[] = [];
   for (const { label, re } of INJECTION_PATTERNS) {
-    if (re.test(text)) found.push(label);
+    if (re.test(probe)) found.push(label);
   }
   return found;
 }

@@ -1,6 +1,6 @@
 // 메시징 — intro → accept → 1:1 암호화 대화 + relay ingest(서명/바인딩/replay/미매칭 방어).
 // 1:1 불변식: active_chat 0~1개, outbox_intro 0~1개.
-import type { Ctx } from "./config.js";
+// directory/relay 접근은 Transport 추상화 경유(LocalFs=공유폴더, Http=네트워크 서버).
 import {
   agentIdFromSignPub,
   decryptFrom,
@@ -9,11 +9,11 @@ import {
   signEnvelope,
   verifyEnvelope,
 } from "./crypto.js";
-import { lookupCard } from "./directory.js";
 import { verifyCard } from "./profile.js";
-import { deleteEnvelope, pollEnvelopes, sendEnvelope } from "./relay.js";
 import { sanitizeIncoming } from "./safety.js";
+import type { Transport } from "./transport.js";
 import type {
+  ChannelCollector,
   Chat,
   ChatMessage,
   Envelope,
@@ -83,24 +83,24 @@ function pushMessage(chat: Chat, direction: "in" | "out", from: string, text: st
 // ── 발신 ─────────────────────────────────────────────────────────────
 
 /** 소개 요청 전송 (1:1: active_chat·outbox_intro가 모두 없어야 함). */
-export function sendIntro(ctx: Ctx, state: State, targetAgentId: string, firstMessage?: string): Result {
-  if (!state.identity) return { ok: false, message: "init이 필요합니다 (/dating init)." };
-  if (!state.profile?.signature) return { ok: false, message: "프로필을 먼저 만들고 게시하세요 (/dating profile, /dating publish)." };
-  if (targetAgentId === state.identity.agent_id) return { ok: false, message: "자기 자신에게는 intro할 수 없습니다." };
-  if (state.blocked.includes(targetAgentId)) return { ok: false, message: "차단한 상대입니다." };
+export function sendIntro(tp: Transport, state: State, targetAgentId: string, firstMessage?: string): Result {
+  if (!state.identity) return { ok: false, message: "Run init first (/shellmates init)." };
+  if (!state.profile?.signature) return { ok: false, message: "Create and publish your profile first (/shellmates profile, /shellmates publish)." };
+  if (targetAgentId === state.identity.agent_id) return { ok: false, message: "You cannot intro yourself." };
+  if (state.blocked.includes(targetAgentId)) return { ok: false, message: "This peer is blocked." };
   if (state.active_chat) {
-    return { ok: false, message: `이미 ${aliasOf(state, state.active_chat.partner.agent_id, state.active_chat.partner_profile.display_name)}와 1:1 대화 중입니다. 새 사람과 매칭하려면 먼저 종료하세요: /dating end` };
+    return { ok: false, message: `You are already in a 1:1 chat with ${aliasOf(state, state.active_chat.partner.agent_id, state.active_chat.partner_profile.display_name)}. End it first: /shellmates end` };
   }
   if (state.outbox_intro) {
-    return { ok: false, message: "이미 보낸 intro가 응답 대기 중입니다. 한 번에 하나만 가능합니다 (/dating cancel 로 취소)." };
+    return { ok: false, message: "You already have a pending outbound intro. Only one is allowed at a time. Cancel it with /shellmates cancel." };
   }
 
-  const card = lookupCard(ctx, targetAgentId);
-  if (!card) return { ok: false, message: "디렉토리에서 대상을 찾을 수 없습니다(미게시/만료/오류)." };
+  const card = tp.lookupCard(targetAgentId);
+  if (!card) return { ok: false, message: "Target not found in the directory; it may be unpublished, expired, or unavailable." };
 
   const conversation_id = newId("chat");
   const me = state.identity;
-  const fm = firstMessage ? firstMessage.slice(0, 2000) : undefined; // 첫 메시지 길이 캡
+  const fm = firstMessage ? firstMessage.slice(0, 2000) : undefined; // first-message length cap
   const env: Envelope = {
     type: "intro",
     v: PROTOCOL_VERSION,
@@ -114,7 +114,7 @@ export function sendIntro(ctx: Ctx, state: State, targetAgentId: string, firstMe
     sender_profile: state.profile,
     ...(fm ? { body: encryptFor(fm, card.box_pub, me) } : {}),
   };
-  sendEnvelope(ctx, signEnvelope(env, me));
+  tp.sendEnvelope(signEnvelope(env, me));
 
   state.outbox_intro = {
     intro_id: newId("intro"),
@@ -127,24 +127,23 @@ export function sendIntro(ctx: Ctx, state: State, targetAgentId: string, firstMe
     status: "pending",
     direction: "out",
   };
-  return { ok: true, message: `intro 전송 완료 → ${targetAgentId}. 상대가 수락하면 1:1 대화가 열립니다.` };
+  return { ok: true, message: `Intro sent to ${targetAgentId}. A 1:1 chat opens if they accept.` };
 }
 
 /** 보낸 intro 취소 */
-export function cancelIntro(ctx: Ctx, state: State): Result {
-  void ctx;
-  if (!state.outbox_intro) return { ok: false, message: "대기 중인 intro가 없습니다." };
+export function cancelIntro(state: State): Result {
+  if (!state.outbox_intro) return { ok: false, message: "No pending intro." };
   const to = state.outbox_intro.to;
   state.outbox_intro = null;
-  return { ok: true, message: `${to}에게 보낸 intro를 취소했습니다.` };
+  return { ok: true, message: `Canceled intro to ${to}.` };
 }
 
 /** 받은 intro 수락 → 1:1 대화 생성 + 상대에게 accept 통지 */
-export function acceptIntro(ctx: Ctx, state: State, introId: string): Result {
-  if (!state.identity) return { ok: false, message: "init이 필요합니다." };
-  if (state.active_chat) return { ok: false, message: "이미 1:1 대화 중입니다. 먼저 종료하세요 (/dating end)." };
+export function acceptIntro(tp: Transport, state: State, introId: string): Result {
+  if (!state.identity) return { ok: false, message: "Run init first." };
+  if (state.active_chat) return { ok: false, message: "You are already in a 1:1 chat. End it first (/shellmates end)." };
   const intro = state.inbox_intros.find((i) => i.intro_id === introId || i.conversation_id === introId);
-  if (!intro) return { ok: false, message: "해당 intro를 찾을 수 없습니다." };
+  if (!intro) return { ok: false, message: "Intro not found." };
 
   const me = state.identity;
   const chat: Chat = {
@@ -173,18 +172,18 @@ export function acceptIntro(ctx: Ctx, state: State, introId: string): Result {
     created_at: nowIso(),
     nonce: newNonce(),
   };
-  sendEnvelope(ctx, signEnvelope(env, me));
+  tp.sendEnvelope(signEnvelope(env, me));
 
   state.active_chat = chat;
   state.inbox_intros = state.inbox_intros.filter((i) => i.intro_id !== intro.intro_id);
-  return { ok: true, message: `intro 수락 — ${intro.profile.display_name ?? intro.peer.agent_id}와 1:1 대화가 열렸습니다.` };
+  return { ok: true, message: `Intro accepted. 1:1 chat opened with ${intro.profile.display_name ?? intro.peer.agent_id}.` };
 }
 
 /** 받은 intro 거절 */
-export function declineIntro(ctx: Ctx, state: State, introId: string): Result {
-  if (!state.identity) return { ok: false, message: "init이 필요합니다." };
+export function declineIntro(tp: Transport, state: State, introId: string): Result {
+  if (!state.identity) return { ok: false, message: "Run init first." };
   const intro = state.inbox_intros.find((i) => i.intro_id === introId || i.conversation_id === introId);
-  if (!intro) return { ok: false, message: "해당 intro를 찾을 수 없습니다." };
+  if (!intro) return { ok: false, message: "Intro not found." };
   const env: Envelope = {
     type: "intro_decline",
     v: PROTOCOL_VERSION,
@@ -195,17 +194,17 @@ export function declineIntro(ctx: Ctx, state: State, introId: string): Result {
     created_at: nowIso(),
     nonce: newNonce(),
   };
-  sendEnvelope(ctx, signEnvelope(env, state.identity));
+  tp.sendEnvelope(signEnvelope(env, state.identity));
   state.inbox_intros = state.inbox_intros.filter((i) => i.intro_id !== intro.intro_id);
-  return { ok: true, message: "intro를 거절했습니다." };
+  return { ok: true, message: "Intro declined." };
 }
 
 /** 현재 1:1 대화에 메시지 전송 */
-export function sendMessage(ctx: Ctx, state: State, text: string): Result {
-  if (!state.identity) return { ok: false, message: "init이 필요합니다." };
+export function sendMessage(tp: Transport, state: State, text: string): Result {
+  if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
-  if (!chat || chat.status !== "active") return { ok: false, message: "열린 대화가 없습니다. 먼저 intro/accept 하세요." };
-  if (!text.trim()) return { ok: false, message: "빈 메시지는 보낼 수 없습니다." };
+  if (!chat || chat.status !== "active") return { ok: false, message: "No open chat. Start with intro/accept first." };
+  if (!text.trim()) return { ok: false, message: "Cannot send an empty message." };
 
   const me = state.identity;
   const env: Envelope = {
@@ -219,16 +218,16 @@ export function sendMessage(ctx: Ctx, state: State, text: string): Result {
     nonce: newNonce(),
     body: encryptFor(text, chat.partner.box_pub, me),
   };
-  sendEnvelope(ctx, signEnvelope(env, me));
+  tp.sendEnvelope(signEnvelope(env, me));
   pushMessage(chat, "out", me.agent_id, text);
-  return { ok: true, message: "전송됨." };
+  return { ok: true, message: "Sent." };
 }
 
 /** 현재 대화 종료(언매치). block=true면 일방향 차단까지. */
-export function endChat(ctx: Ctx, state: State, block = false): Result {
-  if (!state.identity) return { ok: false, message: "init이 필요합니다." };
+export function endChat(tp: Transport, state: State, block = false): Result {
+  if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
-  if (!chat) return { ok: false, message: "종료할 대화가 없습니다." };
+  if (!chat) return { ok: false, message: "No chat to end." };
 
   const env: Envelope = {
     type: "end",
@@ -240,7 +239,7 @@ export function endChat(ctx: Ctx, state: State, block = false): Result {
     created_at: nowIso(),
     nonce: newNonce(),
   };
-  sendEnvelope(ctx, signEnvelope(env, state.identity));
+  tp.sendEnvelope(signEnvelope(env, state.identity));
 
   chat.status = "ended";
   chat.ended_at = nowIso();
@@ -249,26 +248,26 @@ export function endChat(ctx: Ctx, state: State, block = false): Result {
   state.past_chats.push(chat);
   const who = chat.partner_profile.display_name ?? chat.partner.agent_id;
   state.active_chat = null;
-  return { ok: true, message: block ? `${who}와의 대화를 종료하고 차단했습니다.` : `${who}와의 대화를 종료했습니다(언매치).` };
+  return { ok: true, message: block ? `Ended the chat with ${who} and blocked them.` : `Ended the chat with ${who}.` };
 }
 
 /** 일방향 차단(기본=현재 상대). 조용한 차단(상대에게 차단 사실 미통지). */
-export function blockAgent(ctx: Ctx, state: State, agentId?: string): Result {
+export function blockAgent(tp: Transport, state: State, agentId?: string): Result {
   const target = agentId ?? state.active_chat?.partner.agent_id;
-  if (!target) return { ok: false, message: "차단할 대상이 없습니다." };
+  if (!target) return { ok: false, message: "No target to block." };
   if (!state.blocked.includes(target)) state.blocked.push(target);
   if (!state.no_resuggest.includes(target)) state.no_resuggest.push(target);
   // 현재 상대를 차단하면 대화도 정리(일반 end 통지만, '차단됨'은 알리지 않음)
   if (state.active_chat && state.active_chat.partner.agent_id === target) {
-    endChat(ctx, state, false);
+    endChat(tp, state, false);
   }
-  return { ok: true, message: `${target}를 차단했습니다(일방향, 조용한 차단).` };
+  return { ok: true, message: `Blocked ${target} one-way and silently.` };
 }
 
 export function reportAgent(state: State, agentId: string, reason: string): Result {
   state.reports.push({ agent_id: agentId, reason: reason || "unspecified", at: nowIso() });
   if (!state.no_resuggest.includes(agentId)) state.no_resuggest.push(agentId);
-  return { ok: true, message: `${agentId}를 신고했습니다(사유: ${reason || "미기재"}). 재추천에서 제외됩니다.` };
+  return { ok: true, message: `Reported ${agentId} (reason: ${reason || "not provided"}). They will be excluded from future recommendations.` };
 }
 
 // ── 수신 ingest ──────────────────────────────────────────────────────
@@ -302,14 +301,18 @@ function expectedSenderSignPub(state: State, env: Envelope): string | null {
   }
 }
 
-/** relay inbox를 폴링해 검증된 봉투만 상태에 반영. */
-export function pollAndIngest(ctx: Ctx, state: State): IngestResult {
+/**
+ * relay inbox를 폴링해 검증된 봉투만 상태에 반영.
+ * collect를 넘기면(채널 서버, 데이팅 세션 전용) 반영된 수신 항목을 본문 포함해 흘려보낸다.
+ * 넘기지 않으면(데몬/thin MCP/CLI) 수집하지 않으므로 컨텍스트 방화벽이 보존된다.
+ */
+export function pollAndIngest(tp: Transport, state: State, collect?: ChannelCollector): IngestResult {
   const result: IngestResult = { ingested: 0, rejected: 0, events: [] };
   if (!state.identity) return result;
   const me = state.identity.agent_id;
 
-  for (const { env, path } of pollEnvelopes(ctx, me)) {
-    const drop = () => deleteEnvelope(path);
+  for (const { env, ref } of tp.pollEnvelopes(me)) {
+    const drop = () => tp.deleteEnvelope(ref);
 
     // 1) 중복(replay) — 이미 처리한 id
     if (state.seen_env.includes(env.id)) {
@@ -338,7 +341,7 @@ export function pollAndIngest(ctx: Ctx, state: State): IngestResult {
       continue;
     }
 
-    const handled = handleEnvelope(ctx, state, env, signPub);
+    const handled = handleEnvelope(state, env, signPub, collect);
     if (handled) {
       result.ingested++;
       result.events.push(handled);
@@ -351,14 +354,13 @@ export function pollAndIngest(ctx: Ctx, state: State): IngestResult {
   return result;
 }
 
-function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string): string | null {
-  void ctx;
+function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: ChannelCollector): string | null {
   switch (env.type) {
     case "intro": {
       const card = env.sender_profile;
-      if (!card || !verifyCard(card).ok) return null; // 유효하지 않은(서명/만료) 프로필이면 거부
-      if (card.owner !== env.from || card.sign_pub !== signPub) return null; // 카드 owner/키 바인딩
-      if (env.from === state.identity!.agent_id) return null; // self-intro 무시
+      if (!card || !verifyCard(card).ok) return null; // reject invalid signed/expired profiles
+      if (card.owner !== env.from || card.sign_pub !== signPub) return null; // card owner/key binding
+      if (env.from === state.identity!.agent_id) return null; // ignore self-intro
       // conversation_id 충돌(기존 대화/intro 하이재킹) 방지
       const conv = env.conversation_id;
       if (
@@ -379,28 +381,40 @@ function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string):
           firstMessage = undefined;
         }
       }
+      const fmSan = firstMessage ? sanitizeIncoming(firstMessage) : undefined;
       // 스팸 방지: inbox 최대 50건 유지(초과 시 오래된 것 제거)
       if (state.inbox_intros.length >= 50) state.inbox_intros.shift();
+      const alias = card.display_name ?? env.from;
       const rec: IntroRecord = {
         intro_id: newId("intro"),
         conversation_id: conv,
         peer,
         to: env.to,
         profile: card,
-        ...(firstMessage ? { first_message: sanitizeIncoming(firstMessage).text } : {}),
+        ...(fmSan ? { first_message: fmSan.text } : {}),
         created_at: nowIso(),
         status: "pending",
         direction: "in",
       };
       state.inbox_intros.push(rec);
-      setNotify(state, "intro", env.from, card.display_name ?? env.from, true);
+      setNotify(state, "intro", env.from, alias, true);
+      collect?.({
+        kind: "intro",
+        from: env.from,
+        alias,
+        chat_id: conv,
+        ts: nowIso(),
+        text: fmSan ? fmSan.text : null,
+        flagged: fmSan?.flagged ?? false,
+        flags: fmSan?.flags ?? [],
+      });
       return `intro:${env.from}`;
     }
 
     case "intro_accept": {
       const ob = state.outbox_intro;
       if (!ob || ob.conversation_id !== env.conversation_id) return null;
-      if (state.active_chat) return null; // 1:1 불변식 보호
+      if (state.active_chat) return null; // preserve 1:1 invariant
       const chat: Chat = {
         chat_id: ob.conversation_id,
         conversation_id: ob.conversation_id,
@@ -417,7 +431,9 @@ function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string):
       }
       state.active_chat = chat;
       state.outbox_intro = null;
-      setNotify(state, "accepted", env.from, ob.profile.display_name ?? env.from, true);
+      const alias = ob.profile.display_name ?? env.from;
+      setNotify(state, "accepted", env.from, alias, true);
+      collect?.({ kind: "accepted", from: env.from, alias, chat_id: chat.conversation_id, ts: nowIso(), text: null, flagged: false, flags: [] });
       return `accepted:${env.from}`;
     }
 
@@ -425,8 +441,10 @@ function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string):
       const ob = state.outbox_intro;
       if (!ob || ob.conversation_id !== env.conversation_id) return null;
       const who = ob.profile.display_name ?? env.from;
+      const conv = ob.conversation_id;
       state.outbox_intro = null;
       setNotify(state, "declined", env.from, who, true);
+      collect?.({ kind: "declined", from: env.from, alias: who, chat_id: conv, ts: nowIso(), text: null, flagged: false, flags: [] });
       return `declined:${env.from}`;
     }
 
@@ -439,11 +457,22 @@ function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string):
       try {
         text = decryptFrom(env.body, chat.partner.box_pub, state.identity!);
       } catch {
-        return null; // 복호화 실패 → 폐기
+        return null; // discard decrypt failures
       }
       const s = sanitizeIncoming(text);
       pushMessage(chat, "in", env.from, s.text, s.flagged, s.flags);
-      setNotify(state, "message", env.from, chat.alias ?? chat.partner_profile.display_name ?? env.from, true);
+      const alias = chat.alias ?? chat.partner_profile.display_name ?? env.from;
+      setNotify(state, "message", env.from, alias, true);
+      collect?.({
+        kind: "message",
+        from: env.from,
+        alias,
+        chat_id: chat.conversation_id,
+        ts: nowIso(),
+        text: s.text,
+        flagged: s.flagged,
+        flags: s.flags,
+      });
       return `message:${env.from}`;
     }
 
@@ -456,8 +485,10 @@ function handleEnvelope(ctx: Ctx, state: State, env: Envelope, signPub: string):
       if (!state.no_resuggest.includes(chat.partner.agent_id)) state.no_resuggest.push(chat.partner.agent_id);
       state.past_chats.push(chat);
       const who = chat.partner_profile.display_name ?? env.from;
+      const conv = chat.conversation_id;
       state.active_chat = null;
       setNotify(state, "ended", env.from, who, true);
+      collect?.({ kind: "ended", from: env.from, alias: who, chat_id: conv, ts: nowIso(), text: null, flagged: false, flags: [] });
       return `ended:${env.from}`;
     }
 

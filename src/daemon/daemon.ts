@@ -2,7 +2,7 @@
 // 백그라운드 데몬 — relay를 주기 watch, 새 봉투 ingest, out-of-band 알림(사운드/notify.json/stderr).
 // 컨텍스트 방화벽: 메시지 본문·코칭은 절대 출력하지 않는다. 카운트/이벤트/발신 alias 만 노출.
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
 import type { IngestResult } from "../core/messaging.js";
 
@@ -23,7 +23,7 @@ function notifyLine(engine: Engine): void {
   const n = engine.state.notifications;
   // 본문 없음: 카운트 + 이벤트 + 발신 alias 까지만 (컨텍스트 방화벽)
   process.stderr.write(
-    `🔔 TerminalLove: ${n.unread} unread — last "${n.last_event ?? "-"}" from ${n.last_from_alias ?? "-"}\n`,
+    `🔔 Shellmates: ${n.unread} unread — last "${n.last_event ?? "-"}" from ${n.last_from_alias ?? "-"}\n`,
   );
 }
 
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(tick(engine)));
     return;
   }
-  process.stderr.write(`TerminalLove daemon watching for ${engine.agentId} (every ${intervalMs}ms). Ctrl-C to stop.\n`);
+  process.stderr.write(`Shellmates daemon watching for ${engine.agentId} (every ${intervalMs}ms). Ctrl-C to stop.\n`);
   setInterval(() => {
     try {
       tick(engine);
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
   }, intervalMs);
 }
 
-const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = isMainEntry(import.meta.url);
 if (isMain) {
   main().catch((e) => {
     console.error(e);

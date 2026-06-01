@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   log("  [Bob 코치 제안]");
   if (bOpen.coaching) {
     for (const g of bOpen.coaching.guidance) log("    - " + g);
-    log("    suggested: " + bOpen.coaching.suggested_reply);
+    log("    approach: " + bOpen.coaching.reply_strategy);
   }
   bob.send("반가워요 Alice! 저는 요즘 디자인 시스템이랑 AI 툴 붙이는 작업 하고 있어요. Alice는요?");
   const aOpen2 = alice.open();
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   assert.equal(aOpen2.chat!.messages.at(-1)!.direction, "in");
   const aCoach = alice.reply();
   log("  [Alice 코치 제안]");
-  if (aCoach.coaching) log("    suggested: " + aCoach.coaching.suggested_reply);
+  if (aCoach.coaching) log("    approach: " + aCoach.coaching.reply_strategy);
   alice.send("저는 개발 에이전트 안에서 도는 작은 툴 만들고 있어요. 디자인 시스템 얘기 더 듣고 싶네요!");
   const bOpen2 = bob.open();
   assert.equal(bOpen2.chat!.messages.at(-1)!.direction, "in");

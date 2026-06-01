@@ -42,11 +42,33 @@ export function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
 }
 
-function atomicWrite(path: string, data: string): void {
+// state.json은 개인키(identity)를 담으므로 소유자 전용(0600)으로 기록(PLAN §10).
+// tmp(항상 새로 생성 → mode 적용 보장) + rename(원자적, dest inode 교체)이라
+// 기존에 느슨한 권한(예: 0644) 파일을 덮어써도 결과가 항상 mode가 된다.
+function atomicWrite(path: string, data: string, mode = 0o600): void {
   ensureDir(dirname(path));
   const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tmp, data, "utf8");
-  renameSync(tmp, path);
+  writeFileSync(tmp, data, { encoding: "utf8", mode });
+  try {
+    renameSync(tmp, path);
+  } catch (e) {
+    // rename 실패 시 stale tmp 정리 후 재던짐(누수 방지).
+    try {
+      rmSync(tmp, { force: true });
+    } catch {
+      /* noop */
+    }
+    throw e;
+  }
+}
+
+/**
+ * 시크릿(개인키 백업 등)을 0600으로 안전하게 기록(덮어쓰기 포함).
+ * writeFileSync의 mode는 "생성 시"에만 적용되므로 기존 파일을 덮어쓰면 무시된다 →
+ * 항상 tmp+rename으로 dest inode를 교체해 권한을 보장한다.
+ */
+export function writeSecretFile(path: string, data: string): void {
+  atomicWrite(path, data, 0o600);
 }
 
 export function loadState(ctx: Ctx): State {

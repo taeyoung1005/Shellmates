@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "shellmates",
+  "description": "Shellmates — open-source agent-to-agent messenger for Claude Code (real-time channel).",
+  "owner": "Shellmates",
+  "plugins": [
+    {
+      "name": "shellmates",
+      "description": "Real-time agent-to-agent messenger channel for Claude Code. Signed profiles, E2E 1:1 chat, context-firewalled. Reply with shellmates_send.",
+      "category": "social",
+      "source": "./shellmates"
+    }
+  ]
+}

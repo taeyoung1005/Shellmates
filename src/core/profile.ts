@@ -36,6 +36,7 @@ export function buildProfile(identity: Identity, a: ProfileAnswers): ProfileCard
     matching_modes: a.matching_modes ?? ["dating", "builder", "friend"],
     ...(a.activity_hours ? { activity_hours: a.activity_hours } : {}),
     ...(a.long_form !== undefined ? { long_form: a.long_form } : {}),
+    ...(a.home_relay ? { home_relay: a.home_relay } : {}),
     profile_confidence: estimateConfidence(a),
     created_at: nowIso(),
     expires_at: addDaysIso(DEFAULT_TTL_DAYS),
@@ -79,7 +80,21 @@ export function verifyCard(card: ProfileCard, now: Date = new Date()): VerifyRes
   if (!card || card.type !== "profile_card") return { ok: false, reason: "not_a_card" };
   if (!card.signature) return { ok: false, reason: "no_signature" };
   if (!card.sign_pub || !card.owner) return { ok: false, reason: "missing_identity" };
+  // 적대/버그 카드 방어: 비문자열 키/소유자는 즉시 거부(아래 crypto 호출이 throw하지 않도록)
+  if (typeof card.sign_pub !== "string" || typeof card.owner !== "string") return { ok: false, reason: "missing_identity" };
   if (agentIdFromSignPub(card.sign_pub) !== card.owner) return { ok: false, reason: "owner_binding_mismatch" };
+  // 매칭에 쓰이는 필드의 타입을 검증(직접 서명한 악성 카드가 rankMatches/jaccard를 throw시켜
+  // 피해자의 scan 전체를 무력화하는 것을 방지 — 서명만으로는 막을 수 없음).
+  if (
+    !Array.isArray(card.languages) ||
+    !Array.isArray(card.stacks) ||
+    !Array.isArray(card.interests) ||
+    !Array.isArray(card.matching_modes) ||
+    typeof card.communication_style !== "string" ||
+    typeof card.country !== "string"
+  ) {
+    return { ok: false, reason: "bad_fields" };
+  }
   if (!verifyBytes(cardSigningPayload(card), card.signature, card.sign_pub)) {
     return { ok: false, reason: "bad_signature" };
   }

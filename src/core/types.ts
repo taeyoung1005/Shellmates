@@ -1,4 +1,4 @@
-// TerminalLove 프로토콜 공용 타입 정의.
+// Shellmates 프로토콜 공용 타입 정의.
 
 export const PROTOCOL_VERSION = "0.1";
 
@@ -40,6 +40,7 @@ export interface ProfileCard {
   matching_modes: MatchingMode[];
   activity_hours?: string; // 예: "night" | "day" | "flexible"
   long_form?: boolean;
+  home_relay?: string; // (예약) federation 힌트 — 이 신원의 home relay URL. v1은 라우팅에 미사용.
   profile_confidence: number; // 0..1
   created_at: string;
   expires_at: string;
@@ -61,6 +62,7 @@ export interface ProfileAnswers {
   matching_modes?: MatchingMode[];
   activity_hours?: string;
   long_form?: boolean;
+  home_relay?: string; // (예약) federation 힌트
 }
 
 /** 메시지 본문 암호화 봉투(payload) */
@@ -168,11 +170,31 @@ export interface MatchResult {
   reasons: string[];
 }
 
+/**
+ * 실시간 채널(PLAN3 §13) 전용 — pollAndIngest가 수신을 반영하면서 collector로 흘려보내는 원시 항목.
+ * 데이팅 세션에서만 사용하며 본문(text)을 포함할 수 있다. collector를 넘기지 않으면 수집하지 않으므로
+ * 코딩 세션의 thin MCP/데몬 경로(컨텍스트 방화벽)는 영향을 받지 않는다.
+ */
+export interface ChannelItem {
+  kind: "intro" | "accepted" | "declined" | "message" | "ended";
+  from: string; // 발신 agent_id
+  alias: string; // 표시명/별명/agent_id
+  chat_id: string | null; // conversation_id
+  ts: string; // ISO (ingest 시각)
+  text: string | null; // 본문(message/intro 첫 메시지), 없으면 null
+  flagged: boolean; // sanitize 안전 플래그(인젝션/연락처)
+  flags: string[];
+}
+
+export type ChannelCollector = (item: ChannelItem) => void;
+
 export interface CoachingPayload {
   partner_alias: string;
   partner_interests: string[];
   last_incoming?: string;
   guidance: string[];
-  suggested_reply: string;
+  reply_strategy: string;
+  /** @deprecated Do not emit send-ready replies from coaching. */
+  suggested_reply?: string;
   warnings: string[];
 }

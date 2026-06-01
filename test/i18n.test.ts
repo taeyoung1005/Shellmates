@@ -14,8 +14,15 @@ function trackedFiles(): string[] {
     .filter(Boolean);
 }
 
+function isTextFile(file: string): boolean {
+  const bytes = readFileSync(join(ROOT, file));
+  return !bytes.includes(0);
+}
+
 test("GitHub-bound files and landing pages contain no Korean user-facing text", () => {
-  const files = [...trackedFiles(), "landing.template.html", "landing.html"].filter((file) => existsSync(join(ROOT, file)));
+  const files = [...trackedFiles(), "landing.template.html", "landing.html"]
+    .filter((file) => existsSync(join(ROOT, file)))
+    .filter(isTextFile);
   const offenders = files.flatMap((file) => {
     const text = readFileSync(join(ROOT, file), "utf8");
     return text

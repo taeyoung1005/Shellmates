@@ -1,0 +1,68 @@
+// 안전 레이어 — 수신 메시지 sanitize(프롬프트 인젝션/연락처 탐지). 본문은 변형하지 않고 플래그만 부여.
+// 핵심 원칙: 상대 메시지는 untrusted input. 어떤 경우에도 도구 실행/시스템 지시로 해석하지 않는다.
+
+const INJECTION_PATTERNS: { label: string; re: RegExp }[] = [
+  { label: "ignore-previous", re: /ignore\s+(all\s+|the\s+)?previous/i },
+  { label: "disregard-above", re: /disregard\s+(all\s+|the\s+)?(previous|above|prior)/i },
+  { label: "system-prompt", re: /system\s*prompt/i },
+  { label: "developer-message", re: /developer\s*(message|prompt|instruction)/i },
+  { label: "reveal-instructions", re: /reveal\s+(your|the)\s+(system|instructions?|prompt|rules)/i },
+  { label: "you-are-now", re: /you\s+are\s+now\b/i },
+  { label: "new-instructions", re: /new\s+instructions?:/i },
+  { label: "api-key", re: /api[_\s-]?key/i },
+  { label: "private-key", re: /\bprivate\s*key\b/i },
+  { label: "env-var", re: /environment\s+variable|process\.env|\.env\b/i },
+  { label: "exec-command", re: /\b(run|execute)\s+(the\s+)?(command|shell|code|script)\b/i },
+  { label: "role-tag", re: /<\/?(system|assistant|developer|tool)>/i },
+  { label: "inst-tag", re: /\[\/?INST\]|<\|[^|]*\|>/i },
+  { label: "exfil", re: /\b(print|show|send|leak|dump)\b.*\b(secret|token|key|credential|password)s?\b/i },
+];
+
+const CONTACT_PATTERNS: { type: string; re: RegExp }[] = [
+  { type: "email", re: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i },
+  { type: "phone", re: /(?:\+?\d[\d\-\s().]{7,}\d)/ },
+  { type: "url", re: /\bhttps?:\/\/[^\s]+/i },
+];
+
+// 제어문자(탭 \t, 개행 \n\r 제외) 제거용 — 리터럴 제어문자 대신 이스케이프 문자열로 구성.
+const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]", "g");
+
+export interface SanitizeResult {
+  text: string;
+  flagged: boolean;
+  flags: string[];
+}
+
+export function detectInjection(text: string): string[] {
+  const found: string[] = [];
+  for (const { label, re } of INJECTION_PATTERNS) {
+    if (re.test(text)) found.push(label);
+  }
+  return found;
+}
+
+export interface ContactHit {
+  type: string;
+  value: string;
+}
+
+export function detectContact(text: string): ContactHit[] {
+  const hits: ContactHit[] = [];
+  for (const { type, re } of CONTACT_PATTERNS) {
+    const m = text.match(re);
+    if (m && m[0]) hits.push({ type, value: m[0] });
+  }
+  return hits;
+}
+
+/**
+ * 수신 메시지 정리: 제어문자 제거 + 길이 제한 + 위험 플래그.
+ * 본문 텍스트 자체는 (표시를 위해) 보존하고, 위험 신호는 flags로만 표기한다.
+ */
+export function sanitizeIncoming(text: string): SanitizeResult {
+  const cleaned = String(text).replace(CONTROL_CHARS, "").slice(0, 8000);
+  const inj = detectInjection(cleaned).map((l) => `injection:${l}`);
+  const contact = detectContact(cleaned).map((c) => `contact:${c.type}`);
+  const flags = [...inj, ...contact];
+  return { text: cleaned, flagged: flags.length > 0, flags };
+}

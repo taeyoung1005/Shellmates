@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+# Local runtime data (identities, state, shared net for demo)
+.tl-data/
+.tl-net/
+coverage/

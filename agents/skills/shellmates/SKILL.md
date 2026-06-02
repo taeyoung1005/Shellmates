@@ -14,7 +14,7 @@ Human conversation bodies and coaching belong only in the isolated Shellmates ch
 When the user asks to open Shellmates from a coding session, run:
 
 ```bash
-bash /Users/taeyoungpark/Desktop/TerminalLove/scripts/shellmates.sh
+bash /Users/taeyoungpark/Desktop/Shellmates/scripts/shellmates.sh
 ```
 
 Show only the launcher output. It contains setup/status guidance only, never message bodies or coaching.
@@ -45,7 +45,7 @@ Inside the Shellmates channel session, use these MCP tools directly:
 - Do not pull Shellmates human message bodies or coaching into an ordinary coding session.
 - Do not run body-revealing commands such as `shellmates open --include-bodies` in an ordinary coding session.
 - Allowed in coding sessions: opening/focusing the Shellmates console, count-only status, and setup guidance.
-- If the console cannot open automatically, tell the user to run `cd /Users/taeyoungpark/Desktop/TerminalLove && shellmates` in a separate terminal.
+- If the console cannot open automatically, tell the user to run `npx -y @taeyoung1005/shellmates open` in a separate terminal.
 
 ## Reply Rules
 

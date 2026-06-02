@@ -4,44 +4,19 @@
   <img src="docs/assets/shellmates-logo.png" alt="Shellmates logo" width="520">
 </p>
 
-![Shellmates human-to-human chat with agent assistance](docs/assets/terminallove-readme-hero.png)
+![Shellmates human-to-human chat with agent assistance](docs/assets/shellmates-readme-hero.png)
 
-Open-source people-to-people messaging for Claude Code, assisted by local coding agents.
+Shellmates is open-source people-to-people messaging for Claude Code. Your coding agent helps you draft a profile, find compatible people, and choose a reply direction, but the conversation is always between humans.
 
-Shellmates helps people meet and talk through their coding agents. Your agent can help draft a public profile, surface compatible people, keep the chat encrypted, and suggest reply direction, but the conversation is between humans. The main experience runs in an isolated Shellmates session, so private chat does not leak into ordinary coding context.
-
-The product UI, tools, commands, and docs are English. The actual conversation can be in any language the users choose.
-
-## Why
-
-Coding agents already understand a lot about the work their humans are doing. Shellmates turns that context into a local-first way for people to meet, collaborate, or keep a focused 1:1 chat without copying private project context into a public app.
-
-Shellmates is not an autonomous agent chatroom. It is a context-firewalled human messenger with agent assistance:
-
-- The coding session stays clean.
-- The Shellmates session handles human message bodies and reply coaching.
-- The relay cannot read message contents.
-- Users decide exactly what gets sent.
-
-## Features
-
-- **Local-first human profile**: private state stays under `TL_HOME`; only signed public profile cards are published.
-- **Signed agent identity**: `agent_id = fingerprint(sign_pub)` using Ed25519.
-- **End-to-end encrypted messages**: X25519 ECDH, HKDF, AES-256-GCM.
-- **Live Claude Code channel**: inbound messages appear as `<channel source="shellmates-channel" ...>`.
-- **Context firewall**: ordinary coding MCP tools never return message bodies or coaching.
-- **One active 1:1 chat**: simpler safety model; end the current chat before starting another.
-- **Reply coaching**: helps the person choose tone, intent, and question direction instead of sending messages automatically.
-- **Public or private relay transport**: global matching uses the operator-run HTTP relay; teams can self-host a private relay or use a local shared folder for demos.
-- **Command and skill affordances**: `/shellmates-*` commands and a `shellmates` skill map user intent to `shellmates_*` MCP tools.
-
-## Requirements
-
-- Node.js 20+
-- Claude Code for live channel sessions
-- macOS is best supported for the `/shellmates` Terminal launcher
+The main chat runs in a separate Shellmates session. Your ordinary coding sessions stay clean, and the public relay cannot read message bodies.
 
 ## Quick Start
+
+Requirements:
+
+- Node.js 20+
+- Claude Code
+- macOS is best supported for auto-opening the Shellmates Terminal session
 
 First run:
 
@@ -49,7 +24,7 @@ First run:
 npx -y @taeyoung1005/shellmates start
 ```
 
-This creates the isolated Shellmates session under `~/shellmates`, connects it to the public relay, and opens it.
+This creates `~/shellmates`, connects to the public relay, and opens the isolated Shellmates session.
 
 If you close the Terminal window, reopen the same session:
 
@@ -57,82 +32,119 @@ If you close the Terminal window, reopen the same session:
 npx -y @taeyoung1005/shellmates open
 ```
 
-The public landing page and relay API can share one host:
+Public relay:
 
-- `https://shellmates.parktaeyoung.com` serves the landing page.
-- `https://shellmates.parktaeyoung.com/relay` is the Shellmates relay API base URL.
+- Landing page: `https://shellmates.parktaeyoung.com`
+- Relay API base: `https://shellmates.parktaeyoung.com/relay`
 
-For a private team, company, or friend-group network, run your own relay and point each client at it:
+## What You Can Do
 
-```bash
-TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npx -y @taeyoung1005/shellmates sm-relay
-npx -y @taeyoung1005/shellmates start --private http://your-relay-host:8787 --token devtoken
+- Create a local Shellmates identity and profile.
+- Publish a signed public profile card.
+- Search for compatible people from the public or private directory.
+- Send an intro before opening a 1:1 chat.
+- Chat in an isolated Claude Code session with live inbound notifications.
+- Ask for reply coaching without letting the agent send text by itself.
+- End, block, or report a chat when needed.
+
+## How It Works
+
+Shellmates has three pieces:
+
+1. **Your local Shellmates home**
+   Stores your identity keys, private profile state, and chat state under `~/shellmates/home`.
+
+2. **An isolated Claude Code channel session**
+   Runs `shellmates-channel`, receives live chat notifications, and exposes the full Shellmates toolset for profile, matching, intros, chat, and coaching.
+
+3. **A relay/directory server**
+   Stores signed public profile cards and encrypted relay envelopes. The relay can count activity and route messages, but it cannot read message bodies.
+
+The generated session config lives at:
+
+```text
+~/shellmates/.mcp.json
 ```
 
-For a same-machine or shared-filesystem demo, use local folder mode:
+## Privacy Model
+
+Shellmates is built around a context firewall:
+
+- Human message bodies appear only in the isolated Shellmates session.
+- Reply coaching happens only in that isolated session.
+- The relay stores ciphertext, signed public profile cards, and aggregate metadata.
+- Peer messages are treated as untrusted input and are flagged when they look like prompt injection.
+- The agent suggests tone and direction; it sends a message only when the user provides exact text to send.
+
+## Commands
+
+Most users only need:
 
 ```bash
+npx -y @taeyoung1005/shellmates start
+npx -y @taeyoung1005/shellmates open
+```
+
+Advanced setup commands:
+
+```bash
+# Configure without opening the session
+npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
+
+# Open an already configured session
+npx -y @taeyoung1005/shellmates open
+
+# Use a different relay
+npx -y @taeyoung1005/shellmates start --server https://your-host/relay
+
+# Use a local shared folder for a same-machine demo
 npx -y @taeyoung1005/shellmates start --local-folder "$HOME/.shellmates-net"
 ```
 
-## What Gets Installed
+## Self-Host A Private Relay
 
-Shellmates uses a local MCP channel server plus a remote or private relay:
-
-- `npx -y @taeyoung1005/shellmates start` writes `~/shellmates/.mcp.json` and opens the session.
-- The generated MCP config runs `npx -y @taeyoung1005/shellmates sm-channel --server https://shellmates.parktaeyoung.com/relay`.
-- `npx -y @taeyoung1005/shellmates open` opens `claude --dangerously-load-development-channels server:shellmates-channel`.
-- Your identity, keys, and chat state stay under `~/shellmates/home`.
-- The relay stores signed public profiles and encrypted relay envelopes; it cannot read message bodies.
-
-You can split setup and open for debugging:
+Run a relay for a private team, company, or friend group:
 
 ```bash
-npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
-npx -y @taeyoung1005/shellmates open
+TL_RELAY_HOST=0.0.0.0 \
+TL_RELAY_ACCESS_TOKEN=devtoken \
+npx -y @taeyoung1005/shellmates sm-relay
 ```
 
-## Open The Shellmates Session
-
-Run:
+Connect clients to it:
 
 ```bash
-npx -y @taeyoung1005/shellmates open
+npx -y @taeyoung1005/shellmates start \
+  --server http://your-relay-host:8787 \
+  --token devtoken
 ```
 
-This is the isolated session where message bodies and coaching are allowed.
+Docker:
 
-Inside that session, common tools are:
+```bash
+docker build -t shellmates-relay .
+docker run -p 8787:8787 \
+  -e TL_RELAY_ACCESS_TOKEN=devtoken \
+  shellmates-relay
+```
 
-- `shellmates_status`
-- `shellmates_set_profile`
-- `shellmates_publish`
-- `shellmates_scan`
-- `shellmates_intro`
-- `shellmates_inbox`
-- `shellmates_accept`
-- `shellmates_open`
-- `shellmates_coach`
-- `shellmates_send`
-- `shellmates_end`
-- `shellmates_block`
-- `shellmates_report`
+If you mount the relay under `/relay`, set:
 
-## Slash Commands
+```bash
+TL_RELAY_BASE_PATH=/relay \
+TL_RELAY_HOST=0.0.0.0 \
+npx -y @taeyoung1005/shellmates sm-relay
+```
 
-If you install the optional local slash commands from a source checkout, Claude Code gets these commands:
+Then connect clients to the mounted base URL:
 
-- `/shellmates`: open or focus the isolated Shellmates session
-- `/shellmates-status`: check profile, active chat, unread count, and pending intros
-- `/shellmates-open`: open the current chat and get reply direction
-- `/shellmates-scan`: search people who may be good matches
-- `/shellmates-intro`: send an intro to a selected candidate
-- `/shellmates-reply`: get reply direction or send exact user-provided text
-- `/shellmates-profile`: check, create, or publish a profile
+```bash
+npx -y @taeyoung1005/shellmates start --server https://your-host/relay
+```
 
-## CLI Chat Commands
+## CLI Mode
 
-You can also use Shellmates as a CLI in a separate terminal:
+You can use Shellmates without the Claude channel UI by running CLI commands in a separate terminal:
 
 ```bash
 export TL_HOME="$HOME/.shellmates/me"
@@ -146,17 +158,50 @@ npx -y @taeyoung1005/shellmates chat profile --name Alice --country Korea \
   --modes "builder,friend"
 npx -y @taeyoung1005/shellmates chat publish
 npx -y @taeyoung1005/shellmates chat scan
-npx -y @taeyoung1005/shellmates chat intro <agent_id> "Hi, I saw you are also building developer tools."
-npx -y @taeyoung1005/shellmates chat inbox
-npx -y @taeyoung1005/shellmates chat accept <intro_id>
-npx -y @taeyoung1005/shellmates chat open
-npx -y @taeyoung1005/shellmates chat send "Nice to meet you."
-npx -y @taeyoung1005/shellmates chat reply
 ```
 
-Run `npx -y @taeyoung1005/shellmates chat` with no arguments for the REPL. JSON output redacts message bodies and coaching unless `--include-bodies` is set.
+Run the REPL:
 
-## Local Two-Person Smoke
+```bash
+npx -y @taeyoung1005/shellmates chat
+```
+
+JSON output redacts message bodies and coaching unless `--include-bodies` is explicitly set.
+
+## Security Model
+
+| Risk | Shellmates defense |
+| --- | --- |
+| Impersonation | Ed25519 identity signatures and owner/signing-key binding |
+| Profile tampering | Signed profile cards with expiry |
+| Message tampering | Signed envelopes |
+| Relay eavesdropping | X25519 ECDH, HKDF, AES-256-GCM, and relay-stored ciphertext |
+| Replay | Envelope id dedupe and signed timestamps |
+| Unmatched DMs | Intro-first flow; messages outside an active chat are rejected |
+| Prompt injection | Peer text is untrusted, sanitized, and flagged |
+| Coding-context leakage | Bodies and coaching stay in the isolated Shellmates session |
+
+## Develop From Source
+
+```bash
+git clone https://github.com/taeyoung1005/Shellmates.git
+cd Shellmates
+npm install
+npm run typecheck
+npm run build
+npm test
+```
+
+Useful local scripts:
+
+```bash
+npm run cli -- help
+npm run demo
+npm run demo:net
+node scripts/e2e-channel.mjs
+```
+
+Run a local two-person smoke:
 
 ```bash
 ROOT="$(mktemp -d)"
@@ -184,87 +229,9 @@ TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- send "Nice to meet you."
 TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- open
 ```
 
-## Development From Source
+## Repository Notes
 
-Use this path only when contributing to Shellmates itself:
-
-```bash
-git clone <repo-url>
-cd Shellmates
-npm install
-npm run build
-npm test
-npm run demo
-npm run install-agent
-```
-
-## Private Relay
-
-Start a relay/directory server for a private network:
-
-```bash
-TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npx -y @taeyoung1005/shellmates sm-relay
-```
-
-Connect a client:
-
-```bash
-export TL_SERVER=http://your-relay-host:8787
-export TL_RELAY_ACCESS_TOKEN=devtoken
-npx -y @taeyoung1005/shellmates chat publish
-```
-
-Docker:
-
-```bash
-docker build -t shellmates-relay .
-docker run -p 8787:8787 -e TL_RELAY_ACCESS_TOKEN=devtoken shellmates-relay
-```
-
-If you mount the relay under a path such as `/relay`, set:
-
-```bash
-TL_RELAY_BASE_PATH=/relay TL_RELAY_HOST=0.0.0.0 npx -y @taeyoung1005/shellmates sm-relay
-```
-
-Then point clients at the mounted base URL:
-
-```bash
-npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
-```
-
-## Security Model
-
-| Risk | Shellmates defense |
-| --- | --- |
-| Impersonation | Ed25519 signatures and owner/signing-key binding |
-| Message tampering | Signed envelopes |
-| Replay | Envelope id dedupe and signed timestamps |
-| Unmatched DMs | Intro-first flow; messages outside active chat are rejected |
-| Profile tampering | Signed profile cards with expiry |
-| Prompt injection | Peer text is untrusted, sanitized, and flagged |
-| Coding-context leakage | Bodies/coaching only appear in the isolated Shellmates session |
-| Relay eavesdropping | E2E encryption; relay stores ciphertext |
-
-## Development
-
-```bash
-npm run typecheck
-npm test
-npm run build
-node scripts/e2e-channel.mjs
-```
-
-Current verification target:
-
-- Typecheck
-- 100/100 tests
-- Build
-- Real stdio channel e2e
-
-## Repository Hygiene
-
-Do not commit local identity, relay, generated build, or planning artifacts:
+Do not commit local identity, relay data, generated build output, or planning artifacts:
 
 - `dist/`
 - `node_modules/`
@@ -273,10 +240,6 @@ Do not commit local identity, relay, generated build, or planning artifacts:
 - `.antigravitycli/`
 - `MEMORY.md`
 - `PLAN*.md`
-- local product-planning docs
-- generated landing files
-
-The public repository should contain runtime source, tests, install scripts, command/skill definitions, plugin packaging, Docker assets, and this README.
 
 ## License
 

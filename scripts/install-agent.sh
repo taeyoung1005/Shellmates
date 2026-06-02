@@ -17,7 +17,7 @@ else
   echo "Warning: build output was not found. Run 'npm run build && npm run setup-shellmates' to create the Shellmates session config."
 fi
 
-# Remove old TerminalLove/dating command and skill installs if present.
+# Remove old dating command and skill installs if present.
 rm -f "$HOME/.claude/commands"/dating*.md 2>/dev/null || true
 rm -rf "$HOME/.agents/skills/dating" 2>/dev/null || true
 rm -f "$HOME/.codex/prompts/dating.md" "$HOME/.codex/prompts/shellmates.md" 2>/dev/null || true

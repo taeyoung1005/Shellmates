@@ -78,6 +78,23 @@ test("public stats records attempted users by IP-derived country without requiri
   }
 });
 
+test("public health and stats endpoints are browser-readable", async () => {
+  const snet = await startNet();
+  try {
+    const health = syncFetch(`${snet.srv.baseUrl}/health`, { method: "GET" });
+    assert.equal(health.status, 200);
+    assert.equal(health.headers["access-control-allow-origin"], "*");
+    assert.match(health.headers["access-control-allow-methods"] || "", /GET/);
+
+    const statsPreflight = syncFetch(`${snet.srv.baseUrl}/public-stats`, { method: "OPTIONS" });
+    assert.equal(statsPreflight.status, 204);
+    assert.equal(statsPreflight.headers["access-control-allow-origin"], "*");
+    assert.match(statsPreflight.headers["access-control-allow-methods"] || "", /OPTIONS/);
+  } finally {
+    await snet.srv.close();
+  }
+});
+
 test("public stats tracks current active conversations and chat participants from relay envelopes", async () => {
   const snet = await startNet();
   try {

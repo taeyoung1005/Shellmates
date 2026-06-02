@@ -167,6 +167,18 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     res.end(data);
   };
 
+  const publicStatusHeaders = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "content-type",
+  };
+
+  const sendPublicStatus = (res: ServerResponse, status: number, body: unknown): void => {
+    const data = JSON.stringify(body);
+    res.writeHead(status, { "content-type": "application/json", "x-tl-relay": SERVER_VERSION, ...publicStatusHeaders });
+    res.end(data);
+  };
+
   // Internal implementation note.
   // Internal implementation note.
   // Internal implementation note.
@@ -258,14 +270,20 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     const path = stripBasePath(url.pathname, cfg.basePath);
     const now = Date.now();
 
+    if (method === "OPTIONS" && (path === "/health" || path === "/public-stats")) {
+      res.writeHead(204, publicStatusHeaders);
+      res.end();
+      return;
+    }
+
     // Internal implementation note.
     if (method === "GET" && path === "/health") {
-      send(res, 200, { ok: true, service: "shellmates-relay", version: SERVER_VERSION, open: cfg.open });
+      sendPublicStatus(res, 200, { ok: true, service: "shellmates-relay", version: SERVER_VERSION, open: cfg.open });
       return;
     }
 
     if (method === "GET" && path === "/public-stats") {
-      send(res, 200, store.publicStats(cfg.activeConversationTtlMs, new Date(now)));
+      sendPublicStatus(res, 200, store.publicStats(cfg.activeConversationTtlMs, new Date(now)));
       return;
     }
 

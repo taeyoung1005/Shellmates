@@ -208,8 +208,18 @@
       width: 8px;
       height: 8px;
       border-radius: 999px;
+      background: var(--amber);
+      box-shadow: 0 0 18px rgba(213, 155, 61, 0.8);
+    }
+
+    .status-dot.online {
       background: var(--green);
       box-shadow: 0 0 18px rgba(143, 191, 101, 0.8);
+    }
+
+    .status-dot.offline {
+      background: var(--red);
+      box-shadow: 0 0 18px rgba(220, 107, 100, 0.8);
     }
 
     .map-wrap {
@@ -296,6 +306,34 @@
       line-height: 1.4;
     }
 
+    .relay-checks {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .relay-check {
+      padding: 16px 18px;
+      border-right: 1px solid var(--line);
+    }
+
+    .relay-check:last-child { border-right: 0; }
+    .relay-check span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .relay-check strong {
+      display: block;
+      margin-top: 7px;
+      color: #f4f5f0;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
     section {
       padding: 74px 0;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -360,6 +398,102 @@
     .terminal .ok { color: var(--teal); }
     .terminal .warn { color: var(--amber); }
 
+    .command-stack {
+      display: grid;
+      gap: 14px;
+      max-width: 980px;
+    }
+
+    .command-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.032);
+      overflow: hidden;
+    }
+
+    .command-card.recommended {
+      border-color: rgba(24, 182, 166, 0.42);
+      box-shadow: 0 0 0 1px rgba(24, 182, 166, 0.08), 0 18px 56px rgba(24, 182, 166, 0.08);
+    }
+
+    .command-head {
+      min-height: 50px;
+      padding: 0 14px 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .command-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #d6d7d3;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .badge {
+      padding: 4px 7px;
+      border-radius: 999px;
+      color: #07100f;
+      background: var(--teal);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .copy-button {
+      min-height: 32px;
+      padding: 0 11px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      color: #f4f5f0;
+      background: rgba(255, 255, 255, 0.055);
+      font: 800 12px "JetBrains Mono", monospace;
+      cursor: pointer;
+    }
+
+    .copy-button:hover {
+      border-color: rgba(24, 182, 166, 0.58);
+      background: rgba(24, 182, 166, 0.1);
+    }
+
+    .command-card .terminal {
+      border: 0;
+      border-radius: 0;
+      background: #050608;
+    }
+
+    .command-note {
+      margin: 0;
+      padding: 0 18px 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .advanced-start {
+      max-width: 980px;
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .advanced-start summary {
+      padding: 16px 18px;
+      color: #d6d7d3;
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .advanced-start .terminal {
+      margin: 0 18px 18px;
+    }
+
     footer {
       padding: 32px 0 48px;
       color: var(--muted);
@@ -372,14 +506,14 @@
         grid-template-columns: 1fr;
         min-height: auto;
       }
-      .proof-row, .stats, .grid-3 {
+      .proof-row, .stats, .relay-checks, .grid-3 {
         grid-template-columns: 1fr;
       }
-      .stat {
+      .stat, .relay-check {
         border-right: 0;
         border-bottom: 1px solid var(--line);
       }
-      .stat:last-child { border-bottom: 0; }
+      .stat:last-child, .relay-check:last-child { border-bottom: 0; }
       .nav-links { display: none; }
       .map-wrap { min-height: 260px; }
     }
@@ -432,8 +566,8 @@
 
     <div id="relay" class="panel">
       <div class="panel-head mono">
-        <span style="display:flex;align-items:center;gap:9px"><span class="status-dot"></span>relay.public_stats</span>
-        <span id="updated-at">Waiting for sync</span>
+        <span style="display:flex;align-items:center;gap:9px"><span id="relay-dot" class="status-dot"></span>relay.live_check</span>
+        <span id="updated-at">Checking relay</span>
       </div>
       <div class="map-wrap" id="map-wrap">
         <div class="map"></div>
@@ -459,6 +593,24 @@
         <div class="stat">
           <b id="stat-cards">0</b>
           <span>Public Directory Cards</span>
+        </div>
+      </div>
+      <div class="relay-checks mono">
+        <div class="relay-check">
+          <span>Relay API</span>
+          <strong id="status-health">Checking /health</strong>
+        </div>
+        <div class="relay-check">
+          <span>Stats Feed</span>
+          <strong id="status-stats">Checking /public-stats</strong>
+        </div>
+        <div class="relay-check">
+          <span>Round Trip</span>
+          <strong id="status-latency">-</strong>
+        </div>
+        <div class="relay-check">
+          <span>Endpoint</span>
+          <strong id="status-endpoint">/relay</strong>
         </div>
       </div>
     </div>
@@ -495,24 +647,48 @@
     <div class="shell">
       <div class="section-title">
         <div class="kicker mono">Quick Start</div>
-        <h2>Create two local identities and verify the relay.</h2>
-        <p>Run these commands from the repository root.</p>
+        <h2>Start Shellmates with one command.</h2>
+        <p>No clone, no local relay server. The command connects to the public relay above and opens an isolated Shellmates session for human chat.</p>
       </div>
-      <pre class="terminal"><span class="muted"># Install and build</span>
-npm install
-npm run build
-npm test
+      <div class="command-stack">
+        <div class="command-card recommended">
+          <div class="command-head">
+            <div class="command-label"><span class="badge">Recommended</span><span>Connect to the public relay</span></div>
+            <button class="copy-button" type="button" data-copy-target="cmd-start">Copy</button>
+          </div>
+          <pre id="cmd-start" class="terminal">npx -y @taeyoung1005/shellmates start</pre>
+          <p class="command-note">This writes the isolated channel config under <code>~/shellmates</code>, then opens the Shellmates session. Chat bodies stay out of ordinary coding sessions.</p>
+        </div>
 
-<span class="muted"># Run the HTTP relay mounted under /relay</span>
+        <div class="command-card">
+          <div class="command-head">
+            <div class="command-label"><span>Verify this relay from your terminal</span></div>
+            <button class="copy-button" type="button" data-copy-target="cmd-health">Copy</button>
+          </div>
+          <pre id="cmd-health" class="terminal">curl https://shellmates.parktaeyoung.com/relay/health</pre>
+        </div>
+
+        <div class="command-card">
+          <div class="command-head">
+            <div class="command-label"><span>Optional count-only MCP in coding sessions</span></div>
+            <button class="copy-button" type="button" data-copy-target="cmd-mcp">Copy</button>
+          </div>
+          <pre id="cmd-mcp" class="terminal">claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay</pre>
+          <p class="command-note">This exposes status/open-session helpers only. Message bodies and reply coaching belong in the isolated Shellmates session.</p>
+        </div>
+      </div>
+
+      <details class="advanced-start">
+        <summary>Self-hosting or local development commands</summary>
+        <pre class="terminal"><span class="muted"># Run your own relay from a source checkout</span>
 TL_RELAY_BASE_PATH=/relay TL_RELAY_ACCESS_TOKEN=devtoken npm run server
 
-<span class="muted"># In another terminal, run the network demo</span>
-export TL_SERVER=http://127.0.0.1:8787/relay
-export TL_RELAY_ACCESS_TOKEN=devtoken
-npm run demo:net
+<span class="muted"># Point clients at it</span>
+npx -y @taeyoung1005/shellmates start --server http://127.0.0.1:8787/relay --token devtoken
 
-<span class="ok"># Public landing stats</span>
-curl http://127.0.0.1:8787/relay/public-stats</pre>
+<span class="muted"># Private group relay</span>
+npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
+      </details>
     </div>
   </section>
 
@@ -521,12 +697,14 @@ curl http://127.0.0.1:8787/relay/public-stats</pre>
   </footer>
 
   <script>
-    const defaultStatsUrl =
-      location.protocol === "file:" || (location.hostname === "127.0.0.1" && location.port && location.port !== "8787")
-        ? "http://127.0.0.1:8787/relay/public-stats"
-        : "/relay/public-stats";
-    const queryStatsUrl = new URLSearchParams(location.search).get("stats");
-    const statsUrl = window.TL_RELAY_STATS_URL || queryStatsUrl || defaultStatsUrl;
+    const query = new URLSearchParams(location.search);
+    const defaultRelayBase =
+      location.protocol === "file:" || location.hostname === "127.0.0.1" || location.hostname === "localhost"
+        ? "https://shellmates.parktaeyoung.com/relay"
+        : "/relay";
+    const relayBaseUrl = (window.TL_RELAY_BASE_URL || query.get("relay") || defaultRelayBase).replace(/\/$/, "");
+    const healthUrl = window.TL_RELAY_HEALTH_URL || query.get("health") || `${relayBaseUrl}/health`;
+    const statsUrl = window.TL_RELAY_STATS_URL || query.get("stats") || `${relayBaseUrl}/public-stats`;
     const fmt = new Intl.NumberFormat("en-US");
     const countryNames = {
       KR: "South Korea", US: "United States", JP: "Japan", GB: "United Kingdom", DE: "Germany", FR: "France", ES: "Spain",
@@ -548,6 +726,21 @@ curl http://127.0.0.1:8787/relay/public-stats</pre>
 
     function setText(id, value) {
       document.getElementById(id).textContent = value;
+    }
+
+    function setRelayState(state) {
+      const dot = document.getElementById("relay-dot");
+      dot.classList.toggle("online", state === "online");
+      dot.classList.toggle("offline", state === "offline");
+    }
+
+    function describeEndpoint(url) {
+      try {
+        const parsed = new URL(url, location.href);
+        return parsed.host + parsed.pathname.replace(/\/(health|public-stats)$/, "");
+      } catch {
+        return url.replace(/\/(health|public-stats)$/, "");
+      }
     }
 
     function renderStats(data) {
@@ -585,19 +778,65 @@ curl http://127.0.0.1:8787/relay/public-stats</pre>
       });
     }
 
-    async function loadStats() {
+    async function loadRelayStatus() {
+      const started = performance.now();
+      let healthOk = false;
+      let statsOk = false;
+      try {
+        const health = await fetch(healthUrl, { cache: "no-store" });
+        if (!health.ok) throw new Error("Health response failed");
+        const body = await health.json();
+        healthOk = body.ok === true;
+        setText("status-health", healthOk ? `${body.service || "relay"} ${body.version || ""}`.trim() : "Unexpected response");
+      } catch {
+        setText("status-health", "Offline");
+      }
+
       try {
         const res = await fetch(statsUrl, { cache: "no-store" });
         if (!res.ok) throw new Error("Stats response failed");
         renderStats(await res.json());
+        statsOk = true;
+        setText("status-stats", "Receiving aggregate stats");
       } catch {
         renderStats(fallbackStats);
-        setText("updated-at", "Waiting for relay connection");
+        setText("status-stats", "Not reachable");
+      }
+
+      const latency = Math.max(1, Math.round(performance.now() - started));
+      setText("status-latency", `${latency}ms browser check`);
+      setText("status-endpoint", describeEndpoint(relayBaseUrl));
+
+      if (healthOk && statsOk) {
+        setRelayState("online");
+      } else if (healthOk || statsOk) {
+        setRelayState("checking");
+      } else {
+        setRelayState("offline");
+        setText("updated-at", "Relay not reachable");
       }
     }
 
-    loadStats();
-    setInterval(loadStats, 15000);
+    async function copyCommand(button) {
+      const target = document.getElementById(button.dataset.copyTarget);
+      if (!target) return;
+      const text = target.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Select";
+        target.focus?.();
+      }
+      setTimeout(() => { button.textContent = "Copy"; }, 1400);
+    }
+
+    document.querySelectorAll("[data-copy-target]").forEach((button) => {
+      button.addEventListener("click", () => copyCommand(button));
+    });
+
+    loadRelayStatus();
+    setInterval(loadRelayStatus, 15000);
   </script>
 </body>
 </html>

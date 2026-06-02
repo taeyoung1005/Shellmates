@@ -22,7 +22,7 @@ test("Mac mini deployment files provide a relay container and Cloudflare tunnel 
   assert.match(compose, /TL_RELAY_OPEN: "true"/);
   assert.match(compose, /TL_TRUST_PROXY: "true"/);
   assert.match(compose, /shellmates-data:\/data/);
-  assert.match(compose, /127\.0\.0\.1:8787:8787/);
+  assert.match(compose, /127\.0\.0\.1:8788:8787/);
 
   const envExample = readRepoFile(".env.example");
   assert.match(envExample, /SHELLMATES_HOSTNAME=shellmates\.parktaeyoung\.com/);
@@ -58,7 +58,7 @@ test("GitHub Actions CI/CD deploys only from a Mac mini self-hosted runner", () 
   assert.match(workflow, /macOS/);
   assert.match(workflow, /CLOUDFLARE_TUNNEL_TOKEN: \$\{\{ secrets\.CLOUDFLARE_TUNNEL_TOKEN \}\}/);
   assert.match(workflow, /docker compose up -d --build/);
-  assert.match(workflow, /curl --fail --silent --show-error http:\/\/127\.0\.0\.1:8787\/relay\/health/);
+  assert.match(workflow, /curl --fail --silent --show-error http:\/\/127\.0\.0\.1:8788\/relay\/health/);
   assert.doesNotMatch(workflow, /eyJh|npm_|sk-/);
 
   const doc = readRepoFile("docs/deploy-mac-mini.md");

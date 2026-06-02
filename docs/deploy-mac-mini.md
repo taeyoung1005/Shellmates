@@ -22,7 +22,7 @@ Use `http://shellmates-relay:8787` when `cloudflared` runs from this Docker Comp
 If you run `cloudflared tunnel run --token ...` directly on the Mac mini host instead of Docker Compose, use this service URL instead:
 
 ```text
-http://127.0.0.1:8787
+http://127.0.0.1:8788
 ```
 
 The `^/relay` path is important when the same hostname will later serve the landing page at `/` and the relay API at `/relay`.
@@ -49,10 +49,12 @@ Do not commit `.env`.
 docker compose up -d --build
 ```
 
-The relay binds only to localhost on the Mac mini:
+The relay binds only to localhost on the Mac mini. The host port is published on
+`127.0.0.1:8788` to avoid colliding with other local services; the container still
+listens on `8787` internally, which is what the Cloudflare Tunnel routes to:
 
 ```bash
-curl http://127.0.0.1:8787/relay/health
+curl http://127.0.0.1:8788/relay/health
 ```
 
 The public check should also pass after Cloudflare DNS and tunnel routing are ready:
@@ -95,7 +97,7 @@ When the deploy job runs, it writes `.env` on the runner and executes:
 
 ```bash
 docker compose up -d --build
-curl --fail --silent --show-error http://127.0.0.1:8787/relay/health
+curl --fail --silent --show-error http://127.0.0.1:8788/relay/health
 ```
 
 ## 5. Client Connection
@@ -124,5 +126,5 @@ Relay state is stored in the named Docker volume `shellmates-data`.
 
 - The relay runs with `TL_RELAY_OPEN=true`, so admission is open by design for public matching.
 - Cloudflare should enforce basic WAF and rate limiting for `/relay/*`.
-- The origin port is bound to `127.0.0.1:8787`, not a public interface.
+- The origin port is published on `127.0.0.1:8788` (container port `8787`), not a public interface.
 - Message bodies are end-to-end encrypted; the relay stores signed profiles, encrypted envelopes, and aggregate public stats.

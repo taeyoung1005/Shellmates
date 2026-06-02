@@ -1,0 +1,28 @@
+{
+  // Shellmates landing page — Cloudflare Worker (static assets).
+  //
+  // Path split on the SAME hostname:
+  //   /         -> this Worker (landing page below)
+  //   /relay/*  -> Cloudflare Tunnel -> Mac mini relay container
+  //
+  // The route is intentionally ROOT-ONLY ("…/"), not "/*". A root-only route
+  // can never match /relay/*, so the live relay is structurally protected:
+  // the worst case is "apex doesn't render", never "relay broken".
+  //
+  // The landing page fetches /relay/public-stats (relative, same-origin → no
+  // CORS) every 15s for live stats, which routes through the Tunnel.
+  "name": "shellmates-landing",
+  "compatibility_date": "2025-01-15",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "shellmates.parktaeyoung.com/",
+      "zone_name": "parktaeyoung.com"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

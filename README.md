@@ -201,6 +201,15 @@ npm run demo:net
 node scripts/e2e-channel.mjs
 ```
 
+The production root landing page is a Cloudflare Worker kept in `worker/`:
+
+```bash
+npm run worker:deploy
+```
+
+The Worker route is root-only (`shellmates.parktaeyoung.com/`), so `/relay/*`
+continues to route to the Mac mini relay through Cloudflare Tunnel.
+
 Run a local two-person smoke:
 
 ```bash

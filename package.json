@@ -34,7 +34,8 @@
     "demo:net": "tsx src/demo/demo-net.ts",
     "clean": "rm -rf dist",
     "setup-shellmates": "bash scripts/setup-shellmates.sh",
-    "install-agent": "bash scripts/install-agent.sh"
+    "install-agent": "bash scripts/install-agent.sh",
+    "worker:deploy": "cd worker && wrangler deploy --x-autoconfig=false"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

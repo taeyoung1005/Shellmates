@@ -18,7 +18,7 @@ services:
       TL_MAX_ENVELOPE_BYTES: "${TL_MAX_ENVELOPE_BYTES:-65536}"
       TL_MAX_CARD_BYTES: "${TL_MAX_CARD_BYTES:-32768}"
     ports:
-      - "127.0.0.1:8787:8787"
+      - "127.0.0.1:8788:8787"
     volumes:
       - shellmates-data:/data
 

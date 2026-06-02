@@ -159,6 +159,9 @@ test("package CLI setup defaults to the public relay without clone-time env", ()
   assert.ok(server, "setup should write shellmates-channel config");
   assert.deepEqual(server.args, ["-y", "@taeyoung1005/shellmates", "sm-channel", "--server", "https://relay.default.test"]);
   assert.match(out, /relay mode\s+: public network \(https:\/\/relay\.default\.test\)/);
+  assert.match(out, /npx -y @taeyoung1005\/shellmates open/);
+  assert.match(out, /npx -y @taeyoung1005\/shellmates start/);
+  assert.doesNotMatch(out, /\n  shellmates (open|start)\n/);
 });
 
 test("package CLI setup supports private relay and local folder modes", () => {

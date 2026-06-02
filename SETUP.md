@@ -97,6 +97,21 @@ npm run build
 npm run install-agent
 ```
 
+Inside this source checkout, `npx @taeyoung1005/shellmates` may resolve the
+local package name before the registry package. For local development, run:
+
+```bash
+npm run cli -- start --print
+npm run cli -- open --print
+```
+
+To test the public npm package, run from a directory outside the checkout:
+
+```bash
+cd "$(mktemp -d)"
+npx -y @taeyoung1005/shellmates start
+```
+
 `install-agent` installs local source-checkout commands and skill files:
 
 - `~/.claude/commands/shellmates*.md`

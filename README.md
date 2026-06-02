@@ -192,6 +192,23 @@ npm run build
 npm test
 ```
 
+When you are inside this source checkout, `npx @taeyoung1005/shellmates` may
+resolve the local package name before the registry package. Use the local CLI
+while developing:
+
+```bash
+npm run cli -- start --print
+npm run cli -- open --print
+```
+
+To test the public npm package exactly as a new user sees it, run `npx` from a
+different directory:
+
+```bash
+cd "$(mktemp -d)"
+npx -y @taeyoung1005/shellmates start
+```
+
 Useful local scripts:
 
 ```bash

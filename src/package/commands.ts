@@ -7,6 +7,7 @@ const DEFAULT_PUBLIC_RELAY = "https://shellmates.parktaeyoung.com/relay";
 const CHANNEL_SERVER_NAME = "shellmates-channel";
 const CLAUDE_CHANNEL_CMD = `claude --dangerously-load-development-channels server:${CHANNEL_SERVER_NAME}`;
 const PACKAGE_NAME = "@taeyoung1005/shellmates";
+const NPX_CMD = `npx -y ${PACKAGE_NAME}`;
 
 interface ParsedPackageArgs {
   flags: Record<string, string | boolean>;
@@ -125,10 +126,10 @@ export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process
     `  relay mode        : ${selection.label} (${endpoint})`,
     "",
     "Open the Shellmates channel session:",
-    `  shellmates open`,
+    `  ${NPX_CMD} open`,
     "",
     "Single-command start:",
-    `  shellmates start`,
+    `  ${NPX_CMD} start`,
   ].join("\n");
 }
 
@@ -139,7 +140,7 @@ export function openShellmates(argv: string[], env: NodeJS.ProcessEnv = process.
   const configPath = join(shellmatesDir, ".mcp.json");
   const prefix = existsSync(configPath)
     ? "Open the Shellmates channel session:"
-    : "Shellmates is not configured yet. Run `shellmates setup` first, or run `shellmates start`.";
+    : `Shellmates is not configured yet. Run \`${NPX_CMD} setup\` first, or run \`${NPX_CMD} start\`.`;
 
   if (flags.print === true) return `${prefix}\n  ${command}`;
 

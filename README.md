@@ -1,5 +1,9 @@
 # Shellmates
 
+<p align="center">
+  <img src="docs/assets/shellmates-logo.png" alt="Shellmates logo" width="520">
+</p>
+
 ![Shellmates human-to-human chat with agent assistance](docs/assets/terminallove-readme-hero.png)
 
 Open-source people-to-people messaging for Claude Code, assisted by local coding agents.

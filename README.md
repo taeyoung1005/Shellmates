@@ -8,7 +8,7 @@
 
 Open-source people-to-people messaging for Claude Code, assisted by local coding agents.
 
-Shellmates helps people meet and talk through their coding agents. Your agent can help draft a public profile, surface compatible people, keep the chat encrypted, and suggest reply direction, but the conversation is between humans. Ordinary coding sessions only see count-only status, so private chat does not leak into coding context.
+Shellmates helps people meet and talk through their coding agents. Your agent can help draft a public profile, surface compatible people, keep the chat encrypted, and suggest reply direction, but the conversation is between humans. The main experience runs in an isolated Shellmates session, so private chat does not leak into ordinary coding context.
 
 The product UI, tools, commands, and docs are English. The actual conversation can be in any language the users choose.
 
@@ -43,14 +43,18 @@ Shellmates is not an autonomous agent chatroom. It is a context-firewalled human
 
 ## Quick Start
 
+First run:
+
 ```bash
 npx -y @taeyoung1005/shellmates start
 ```
 
-This configures `~/shellmates/.mcp.json` and opens the isolated Claude Code channel session. By default it connects to the public Shellmates relay:
+This creates the isolated Shellmates session under `~/shellmates`, connects it to the public relay, and opens it.
+
+If you close the Terminal window, reopen the same session:
 
 ```bash
-npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
+npx -y @taeyoung1005/shellmates open
 ```
 
 The public landing page and relay API can share one host:
@@ -75,31 +79,17 @@ npx -y @taeyoung1005/shellmates start --local-folder "$HOME/.shellmates-net"
 
 Shellmates uses a local MCP channel server plus a remote or private relay:
 
-- `npx -y @taeyoung1005/shellmates setup` writes `~/shellmates/.mcp.json`.
+- `npx -y @taeyoung1005/shellmates start` writes `~/shellmates/.mcp.json` and opens the session.
 - The generated MCP config runs `npx -y @taeyoung1005/shellmates sm-channel --server https://shellmates.parktaeyoung.com/relay`.
 - `npx -y @taeyoung1005/shellmates open` opens `claude --dangerously-load-development-channels server:shellmates-channel`.
 - Your identity, keys, and chat state stay under `~/shellmates/home`.
 - The relay stores signed public profiles and encrypted relay envelopes; it cannot read message bodies.
 
-You can split setup and open if you prefer:
+You can split setup and open for debugging:
 
 ```bash
 npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
 npx -y @taeyoung1005/shellmates open
-```
-
-## Claude MCP Registration
-
-For ordinary count-only MCP access in a coding session:
-
-```bash
-claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
-```
-
-For live `<channel>` notifications, use the channel session instead:
-
-```bash
-npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
 ```
 
 ## Open The Shellmates Session
@@ -139,21 +129,6 @@ If you install the optional local slash commands from a source checkout, Claude 
 - `/shellmates-intro`: send an intro to a selected candidate
 - `/shellmates-reply`: get reply direction or send exact user-provided text
 - `/shellmates-profile`: check, create, or publish a profile
-
-## Thin MCP For Coding Sessions
-
-Ordinary coding sessions should use only the thin MCP server:
-
-```bash
-claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
-```
-
-It exposes only:
-
-- `shellmates_status`
-- `shellmates_open_session`
-
-These tools are count-only and body-free. Do not register the full/channel server globally in coding sessions.
 
 ## CLI Chat Commands
 

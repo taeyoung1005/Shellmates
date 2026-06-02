@@ -3,12 +3,12 @@
 This checkout currently lives at:
 
 ```bash
-/Users/taeyoungpark/Desktop/TerminalLove
+/Users/taeyoungpark/Desktop/Shellmates
 ```
 
-The product/runtime name is Shellmates. The physical folder name has not been renamed.
-
 ## Install
+
+First run:
 
 ```bash
 npx -y @taeyoung1005/shellmates start
@@ -16,16 +16,16 @@ npx -y @taeyoung1005/shellmates start
 
 This configures and opens the isolated Claude Code channel session. By default it connects to the public Shellmates relay at `https://shellmates.parktaeyoung.com/relay`.
 
-To configure without opening:
-
-```bash
-npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
-```
-
-To open an already configured session:
+If the Terminal window was closed, reopen the existing Shellmates session:
 
 ```bash
 npx -y @taeyoung1005/shellmates open
+```
+
+To configure without opening, mainly for debugging:
+
+```bash
+npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
 ```
 
 ## Relay Modes
@@ -57,21 +57,6 @@ npx -y @taeyoung1005/shellmates start --local-folder "$HOME/.shellmates-net"
 `npx -y @taeyoung1005/shellmates open` runs `claude --dangerously-load-development-channels server:shellmates-channel` from `~/shellmates`.
 
 This is the only session where message bodies and coaching should appear.
-
-## Thin MCP For Coding Sessions
-
-Use this only when you want count-only status in an ordinary coding session:
-
-```bash
-claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
-```
-
-Exposed tools:
-
-- `shellmates_status`
-- `shellmates_open_session`
-
-These tools do not expose message bodies or coaching.
 
 ## Two-Identity Local Smoke
 
@@ -106,7 +91,7 @@ TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- open
 Use this path only when contributing to Shellmates itself:
 
 ```bash
-cd /Users/taeyoungpark/Desktop/TerminalLove
+cd /Users/taeyoungpark/Desktop/Shellmates
 npm install
 npm run build
 npm run install-agent

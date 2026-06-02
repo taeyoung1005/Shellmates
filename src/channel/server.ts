@@ -19,6 +19,23 @@ import { buildChannelPayload } from "./payload.js";
 const CHANNEL_METHOD = "notifications/claude/channel";
 const DISABLED_INSTRUCTIONS =
   "Shellmates channel is disabled inside Claude Code background jobs. Open a foreground Shellmates session to receive live channel messages.";
+const ONBOARDING_CONTENT = [
+  "Shellmates Quick Start",
+  "",
+  "This is your isolated Shellmates messenger session. Use it for matching and human conversations; keep ordinary coding work in a separate Claude Code session.",
+  "",
+  "Start here:",
+  "1. Call shellmates_status to check unread messages and pending intros.",
+  "2. First time? Call shellmates_set_profile, then shellmates_publish.",
+  "3. Call shellmates_scan to find people, then shellmates_intro to say hello.",
+  "4. For incoming intros, call shellmates_inbox and shellmates_accept.",
+  "",
+  "When chatting:",
+  "- Call shellmates_open to view the current chat.",
+  "- Ask shellmates_coach for reply direction.",
+  "- Call shellmates_send only with exact text the human wants to send.",
+  "- Use shellmates_end, shellmates_block, or shellmates_report for safety.",
+].join("\n");
 
 const INSTRUCTIONS = [
   "This is the isolated Shellmates messenger session. It is separate from coding sessions, and message bodies/coaching are handled here.",
@@ -102,6 +119,28 @@ export async function pushChannelItems(server: McpServer, items: ChannelItem[], 
   return sent;
 }
 
+/** Push the session-start onboarding card into Claude Code as a visible channel notification. */
+export async function pushOnboardingNotification(server: McpServer): Promise<number> {
+  try {
+    await server.server.notification({
+      method: CHANNEL_METHOD,
+      params: {
+        content: ONBOARDING_CONTENT,
+        meta: {
+          from: "shellmates",
+          ts: new Date().toISOString(),
+          flagged: "false",
+          kind: "onboarding",
+        },
+      },
+    });
+    return 1;
+  } catch (e) {
+    process.stderr.write(`channel: onboarding notify failed (${(e as Error).message})\n`);
+    return 0;
+  }
+}
+
 /** One polling tick: ingest relay items and push new channel items. */
 export async function channelTick(server: McpServer, engine: Engine, opts: { maxChars?: number } = {}): Promise<number> {
   const items = engine.channelPoll();
@@ -158,6 +197,12 @@ export async function runChannelServer(argv: string[] = process.argv.slice(2), e
     process.stderr.write("Shellmates channel: no identity. Run `shellmates init`, then create and publish a profile.\n");
   }
   process.stderr.write(`Shellmates channel connected. Relay watch every ${intervalMs}ms. Use only in the dedicated Shellmates session.\n`);
+
+  setTimeout(() => {
+    void pushOnboardingNotification(server).catch((e) => {
+      process.stderr.write(`channel onboarding error: ${(e as Error).message}\n`);
+    });
+  }, 300);
 
   const timer = setInterval(() => {
     void channelTick(server, engine, { maxChars }).catch((e) => {

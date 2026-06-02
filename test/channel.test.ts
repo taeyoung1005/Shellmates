@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildChannelPayload } from "../src/channel/payload.js";
-import { buildChannelServer, buildRuntimeChannelServer, channelTick, pushChannelItems } from "../src/channel/server.js";
+import { buildChannelServer, buildRuntimeChannelServer, channelTick, pushChannelItems, pushOnboardingNotification } from "../src/channel/server.js";
 import type { ChannelItem } from "../src/core/types.js";
 import { bringToChat, engineFor, pair } from "./helpers.js";
 
@@ -136,6 +136,27 @@ test("channel server declares claude/channel capability + Shellmates tools + ins
     for (const need of ["shellmates_send", "shellmates_open", "shellmates_coach", "shellmates_scan", "shellmates_status"]) {
       assert.ok(names.includes(need), "missing tool: " + need);
     }
+  } finally {
+    await close();
+  }
+});
+
+test("channel server can push visible onboarding instructions at session start", async () => {
+  const { server, captured, close } = await connectCapturing();
+  try {
+    const sent = await pushOnboardingNotification(server);
+    await flush();
+    assert.equal(sent, 1);
+    assert.equal(captured.length, 1);
+    const c = captured[0]!;
+    assert.equal(c.method, CHANNEL_METHOD);
+    assert.equal(c.params.meta.kind, "onboarding");
+    assert.equal(c.params.meta.from, "shellmates");
+    assert.ok(c.params.content.includes("Shellmates Quick Start"));
+    assert.ok(c.params.content.includes("shellmates_status"));
+    assert.ok(c.params.content.includes("shellmates_set_profile"));
+    assert.ok(c.params.content.includes("shellmates_scan"));
+    assert.ok(c.params.content.includes("shellmates_send"));
   } finally {
     await close();
   }

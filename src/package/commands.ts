@@ -169,7 +169,7 @@ export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process
 export function openShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {
   const { flags } = parsePackageArgs(argv);
   const shellmatesDir = stringFlag(flags, "dir") || env.SHELLMATES_DIR || join(envHome(env), "shellmates");
-  const command = `cd ${JSON.stringify(shellmatesDir)} && if [ -f CLAUDE.md ]; then cat CLAUDE.md; fi && printf '\\nStarting Claude Code...\\n\\n' && ${CLAUDE_CHANNEL_CMD}`;
+  const command = `cd ${JSON.stringify(shellmatesDir)} && ${CLAUDE_CHANNEL_CMD}`;
   const configPath = join(shellmatesDir, ".mcp.json");
   const prefix = existsSync(configPath)
     ? "Open the Shellmates channel session:"

@@ -201,7 +201,8 @@ test("package CLI setup supports private relay and local folder modes", () => {
 
 test("package CLI open --print shows the Claude channel command without opening Terminal", () => {
   const { out } = runPackageCli(["open", "--print"]);
-  assert.match(out, /cd .*shellmates"? && if \[ -f CLAUDE\.md \]; then cat CLAUDE\.md; fi && printf '\\nStarting Claude Code/);
+  assert.match(out, /cd .*shellmates"? && claude --dangerously-load-development-channels server:shellmates-channel/);
+  assert.doesNotMatch(out, /cat CLAUDE\.md/);
   assert.match(out, /claude --dangerously-load-development-channels server:shellmates-channel/);
 });
 

@@ -150,6 +150,20 @@ test("package CLI setup writes npx-based channel config for the public relay", (
   assert.match(out, /relay mode\s+: public network \(https:\/\/relay\.example\.com\)/);
 });
 
+test("package CLI setup writes visible onboarding instructions for the opened Shellmates session", () => {
+  const { home } = runPackageCli(["setup", "--server", "https://relay.example.com"]);
+  const guidePath = join(home, "shellmates", "CLAUDE.md");
+  assert.ok(existsSync(guidePath), "setup should write CLAUDE.md for the opened Claude Code session");
+  const guide = readFileSync(guidePath, "utf8");
+  assert.match(guide, /Welcome to Shellmates/);
+  assert.match(guide, /shellmates_status/);
+  assert.match(guide, /shellmates_set_profile/);
+  assert.match(guide, /shellmates_scan/);
+  assert.match(guide, /shellmates_send/);
+  assert.match(guide, /npx -y @taeyoung1005\/shellmates open/);
+  assert.match(guide, /https:\/\/relay\.example\.com/);
+});
+
 test("package CLI setup defaults to the public relay without clone-time env", () => {
   const { out, home } = runPackageCli(["setup"], { SHELLMATES_PUBLIC_RELAY_URL: "https://relay.default.test" });
   const config = JSON.parse(readFileSync(join(home, "shellmates", ".mcp.json"), "utf8")) as {
@@ -187,7 +201,8 @@ test("package CLI setup supports private relay and local folder modes", () => {
 
 test("package CLI open --print shows the Claude channel command without opening Terminal", () => {
   const { out } = runPackageCli(["open", "--print"]);
-  assert.match(out, /cd .*shellmates"? && claude --dangerously-load-development-channels server:shellmates-channel/);
+  assert.match(out, /cd .*shellmates"? && if \[ -f CLAUDE\.md \]; then cat CLAUDE\.md; fi && printf '\\nStarting Claude Code/);
+  assert.match(out, /claude --dangerously-load-development-channels server:shellmates-channel/);
 });
 
 test("package CLI start --print configures then shows the Claude channel command", () => {

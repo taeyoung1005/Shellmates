@@ -98,6 +98,38 @@ function channelArgs(selection: SetupSelection): string[] {
   return args;
 }
 
+function onboardingGuide(selection: SetupSelection): string {
+  const endpoint = selection.mode === "local" ? selection.localFolder! : selection.serverUrl!;
+  return `# Welcome to Shellmates
+
+This Claude Code session is only for Shellmates conversations. Human peer messages can appear here, and this session can use Shellmates tools to match, open chats, and send messages.
+
+## Start Here
+
+1. Run \`shellmates_status\` to check whether you have unread messages or pending intros.
+2. If this is your first time, run \`shellmates_set_profile\` with your name, country, languages, stacks, interests, and matching modes.
+3. Run \`shellmates_publish\`, then \`shellmates_scan\` to find people.
+4. Use \`shellmates_intro\` to send an intro. Use \`shellmates_inbox\` and \`shellmates_accept\` for incoming intros.
+
+## Chat
+
+- Run \`shellmates_open\` to view the current chat.
+- Ask for \`shellmates_coach\` when you want reply direction or tone help.
+- Call \`shellmates_send\` only with exact text the user wants to send.
+- Use \`shellmates_end\`, \`shellmates_block\`, or \`shellmates_report\` for safety and cleanup.
+
+## Reopen This Session
+
+If you close the Terminal window, reopen Shellmates with:
+
+\`\`\`bash
+${NPX_CMD} open
+\`\`\`
+
+Configured relay: ${endpoint}
+`;
+}
+
 export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {
   const selection = selectionFromArgs(argv, env);
   mkdirSync(selection.shellmatesHome, { recursive: true });
@@ -116,6 +148,7 @@ export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process
   };
   const configPath = join(selection.shellmatesDir, ".mcp.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+  writeFileSync(join(selection.shellmatesDir, "CLAUDE.md"), onboardingGuide(selection));
 
   const endpoint = selection.mode === "local" ? selection.localFolder! : selection.serverUrl!;
   return [
@@ -136,7 +169,7 @@ export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process
 export function openShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {
   const { flags } = parsePackageArgs(argv);
   const shellmatesDir = stringFlag(flags, "dir") || env.SHELLMATES_DIR || join(envHome(env), "shellmates");
-  const command = `cd ${JSON.stringify(shellmatesDir)} && ${CLAUDE_CHANNEL_CMD}`;
+  const command = `cd ${JSON.stringify(shellmatesDir)} && if [ -f CLAUDE.md ]; then cat CLAUDE.md; fi && printf '\\nStarting Claude Code...\\n\\n' && ${CLAUDE_CHANNEL_CMD}`;
   const configPath = join(shellmatesDir, ".mcp.json");
   const prefix = existsSync(configPath)
     ? "Open the Shellmates channel session:"

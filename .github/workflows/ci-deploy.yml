@@ -1,0 +1,75 @@
+name: CI and Mac mini deploy
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: shellmates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Typecheck, test, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  deploy-mac-mini:
+    name: Deploy relay on Mac mini
+    needs: ci
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    runs-on:
+      - self-hosted
+      - macOS
+      - shellmates
+    env:
+      CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert tunnel secret exists
+        run: |
+          test -n "$CLOUDFLARE_TUNNEL_TOKEN"
+
+      - name: Write runtime env
+        run: |
+          umask 077
+          {
+            echo "SHELLMATES_HOSTNAME=shellmates.parktaeyoung.com"
+            echo "CLOUDFLARE_TUNNEL_TOKEN=$CLOUDFLARE_TUNNEL_TOKEN"
+            echo "TL_RATE_MAX=600"
+            echo "TL_RATE_RELAY_POST_MAX=300"
+            echo "TL_INBOX_MAX=1000"
+            echo "TL_MAX_ENVELOPE_BYTES=65536"
+            echo "TL_MAX_CARD_BYTES=32768"
+          } > .env
+
+      - name: Deploy Docker Compose stack
+        run: docker compose up -d --build
+
+      - name: Verify local relay health
+        run: curl --fail --silent --show-error http://127.0.0.1:8787/relay/health

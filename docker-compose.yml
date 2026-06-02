@@ -1,0 +1,35 @@
+services:
+  shellmates-relay:
+    build:
+      context: .
+    image: shellmates-relay:local
+    container_name: shellmates-relay
+    restart: unless-stopped
+    environment:
+      TL_RELAY_HOST: "0.0.0.0"
+      TL_RELAY_PORT: "8787"
+      TL_RELAY_BASE_PATH: "/relay"
+      TL_RELAY_OPEN: "true"
+      TL_TRUST_PROXY: "true"
+      TL_SERVER_DATA: "/data"
+      TL_RATE_MAX: "${TL_RATE_MAX:-600}"
+      TL_RATE_RELAY_POST_MAX: "${TL_RATE_RELAY_POST_MAX:-300}"
+      TL_INBOX_MAX: "${TL_INBOX_MAX:-1000}"
+      TL_MAX_ENVELOPE_BYTES: "${TL_MAX_ENVELOPE_BYTES:-65536}"
+      TL_MAX_CARD_BYTES: "${TL_MAX_CARD_BYTES:-32768}"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - shellmates-data:/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: shellmates-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      shellmates-relay:
+        condition: service_healthy
+
+volumes:
+  shellmates-data:

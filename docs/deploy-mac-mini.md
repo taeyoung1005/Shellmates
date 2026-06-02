@@ -11,8 +11,21 @@ The public host stays unified:
 
 Create a Cloudflare Tunnel and add a public hostname:
 
-- Hostname: `shellmates.parktaeyoung.com`
+- Subdomain: `shellmates`
+- Domain: `parktaeyoung.com`
+- Path: `^/relay`
+- Service type: `HTTP`
 - Service: `http://shellmates-relay:8787`
+
+Use `http://shellmates-relay:8787` when `cloudflared` runs from this Docker Compose stack. The service name resolves inside the Compose network.
+
+If you run `cloudflared tunnel run --token ...` directly on the Mac mini host instead of Docker Compose, use this service URL instead:
+
+```text
+http://127.0.0.1:8787
+```
+
+The `^/relay` path is important when the same hostname will later serve the landing page at `/` and the relay API at `/relay`.
 
 Copy the tunnel token from Cloudflare.
 

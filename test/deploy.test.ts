@@ -32,6 +32,9 @@ test("Mac mini deployment files provide a relay container and Cloudflare tunnel 
   const doc = readRepoFile("docs/deploy-mac-mini.md");
   assert.match(doc, /docker compose up -d/);
   assert.match(doc, /https:\/\/shellmates\.parktaeyoung\.com\/relay\/health/);
+  assert.match(doc, /Subdomain: `shellmates`/);
+  assert.match(doc, /Path: `\^\/relay`/);
+  assert.match(doc, /Service: `http:\/\/shellmates-relay:8787`/);
 });
 
 test("Dockerfile healthcheck follows TL_RELAY_BASE_PATH when mounted under /relay", () => {
@@ -50,6 +53,7 @@ test("GitHub Actions CI/CD deploys only from a Mac mini self-hosted runner", () 
   assert.match(workflow, /npm run typecheck/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
+  assert.ok(workflow.indexOf("npm run build") < workflow.indexOf("npm test"), "CI must build dist before tests that exercise setup-shellmates.sh");
   assert.match(workflow, /self-hosted/);
   assert.match(workflow, /macOS/);
   assert.match(workflow, /CLOUDFLARE_TUNNEL_TOKEN: \$\{\{ secrets\.CLOUDFLARE_TUNNEL_TOKEN \}\}/);

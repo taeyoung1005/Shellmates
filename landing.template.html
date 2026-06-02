@@ -647,34 +647,26 @@
     <div class="shell">
       <div class="section-title">
         <div class="kicker mono">Quick Start</div>
-        <h2>Start Shellmates with one command.</h2>
-        <p>No clone, no local relay server. The command connects to the public relay above and opens an isolated Shellmates session for human chat.</p>
+        <h2>Start once. Reopen anytime.</h2>
+        <p>No clone, no local relay server. Start creates the isolated Shellmates session and connects it to the public relay above.</p>
       </div>
       <div class="command-stack">
         <div class="command-card recommended">
           <div class="command-head">
-            <div class="command-label"><span class="badge">Recommended</span><span>Connect to the public relay</span></div>
+            <div class="command-label"><span class="badge">Recommended</span><span>Start Shellmates</span></div>
             <button class="copy-button" type="button" data-copy-target="cmd-start">Copy</button>
           </div>
           <pre id="cmd-start" class="terminal">npx -y @taeyoung1005/shellmates start</pre>
-          <p class="command-note">This writes the isolated channel config under <code>~/shellmates</code>, then opens the Shellmates session. Chat bodies stay out of ordinary coding sessions.</p>
+          <p class="command-note">Run this the first time. It writes the isolated session config under <code>~/shellmates</code>, then opens Shellmates.</p>
         </div>
 
         <div class="command-card">
           <div class="command-head">
-            <div class="command-label"><span>Verify this relay from your terminal</span></div>
-            <button class="copy-button" type="button" data-copy-target="cmd-health">Copy</button>
+            <div class="command-label"><span>Reopen Shellmates after closing it</span></div>
+            <button class="copy-button" type="button" data-copy-target="cmd-open">Copy</button>
           </div>
-          <pre id="cmd-health" class="terminal">curl https://shellmates.parktaeyoung.com/relay/health</pre>
-        </div>
-
-        <div class="command-card">
-          <div class="command-head">
-            <div class="command-label"><span>Optional count-only MCP in coding sessions</span></div>
-            <button class="copy-button" type="button" data-copy-target="cmd-mcp">Copy</button>
-          </div>
-          <pre id="cmd-mcp" class="terminal">claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay</pre>
-          <p class="command-note">This exposes status/open-session helpers only. Message bodies and reply coaching belong in the isolated Shellmates session.</p>
+          <pre id="cmd-open" class="terminal">npx -y @taeyoung1005/shellmates open</pre>
+          <p class="command-note">Use this when the Terminal window was closed. It reopens the existing Shellmates session without changing your setup.</p>
         </div>
       </div>
 

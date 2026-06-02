@@ -28,7 +28,7 @@ Shellmates is not an autonomous agent chatroom. It is a context-firewalled human
 - **Context firewall**: ordinary coding MCP tools never return message bodies or coaching.
 - **One active 1:1 chat**: simpler safety model; end the current chat before starting another.
 - **Reply coaching**: helps the person choose tone, intent, and question direction instead of sending messages automatically.
-- **Local or network transport**: shared-folder mode by default; HTTP relay/directory with `TL_SERVER`.
+- **Public or private relay transport**: global matching uses the operator-run HTTP relay; teams can self-host a private relay or use a local shared folder for demos.
 - **Command and skill affordances**: `/shellmates-*` commands and a `shellmates` skill map user intent to `shellmates_*` MCP tools.
 
 ## Requirements
@@ -40,41 +40,70 @@ Shellmates is not an autonomous agent chatroom. It is a context-firewalled human
 ## Quick Start
 
 ```bash
-git clone <repo-url>
-cd Shellmates
-npm install
-npm run build
-npm test
-npm run demo
+npx -y @taeyoung1005/shellmates start
 ```
 
-If you are working from this local checkout before the folder is renamed, use:
+This configures `~/shellmates/.mcp.json` and opens the isolated Claude Code channel session. By default it connects to the public Shellmates relay:
 
 ```bash
-cd /Users/taeyoungpark/Desktop/TerminalLove
+npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
 ```
 
-## Install Claude Code Commands And Skill
+The public landing page and relay API can share one host:
+
+- `https://shellmates.parktaeyoung.com` serves the landing page.
+- `https://shellmates.parktaeyoung.com/relay` is the Shellmates relay API base URL.
+
+For a private team, company, or friend-group network, run your own relay and point each client at it:
 
 ```bash
-npm run install-agent
+TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npx -y @taeyoung1005/shellmates sm-relay
+npx -y @taeyoung1005/shellmates start --private http://your-relay-host:8787 --token devtoken
 ```
 
-This installs:
+For a same-machine or shared-filesystem demo, use local folder mode:
 
-- `~/.claude/commands/shellmates*.md`
-- `~/.agents/skills/shellmates/SKILL.md`
-- `~/shellmates/.mcp.json` with `shellmates-channel`
+```bash
+npx -y @taeyoung1005/shellmates start --local-folder "$HOME/.shellmates-net"
+```
 
-Restart Claude Code or open a new session after installation.
+## What Gets Installed
+
+Shellmates uses a local MCP channel server plus a remote or private relay:
+
+- `npx -y @taeyoung1005/shellmates setup` writes `~/shellmates/.mcp.json`.
+- The generated MCP config runs `npx -y @taeyoung1005/shellmates sm-channel --server https://shellmates.parktaeyoung.com/relay`.
+- `npx -y @taeyoung1005/shellmates open` opens `claude --dangerously-load-development-channels server:shellmates-channel`.
+- Your identity, keys, and chat state stay under `~/shellmates/home`.
+- The relay stores signed public profiles and encrypted relay envelopes; it cannot read message bodies.
+
+You can split setup and open if you prefer:
+
+```bash
+npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
+npx -y @taeyoung1005/shellmates open
+```
+
+## Claude MCP Registration
+
+For ordinary count-only MCP access in a coding session:
+
+```bash
+claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
+```
+
+For live `<channel>` notifications, use the channel session instead:
+
+```bash
+npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
+```
 
 ## Open The Shellmates Session
 
 Run:
 
 ```bash
-cd ~/shellmates
-claude --dangerously-load-development-channels server:shellmates-channel
+npx -y @taeyoung1005/shellmates open
 ```
 
 This is the isolated session where message bodies and coaching are allowed.
@@ -97,7 +126,7 @@ Inside that session, common tools are:
 
 ## Slash Commands
 
-After `npm run install-agent`, Claude Code gets these commands:
+If you install the optional local slash commands from a source checkout, Claude Code gets these commands:
 
 - `/shellmates`: open or focus the isolated Shellmates session
 - `/shellmates-status`: check profile, active chat, unread count, and pending intros
@@ -112,7 +141,7 @@ After `npm run install-agent`, Claude Code gets these commands:
 Ordinary coding sessions should use only the thin MCP server:
 
 ```bash
-claude mcp add --scope user shellmates -- node /absolute/path/Shellmates/dist/src/mcp/server.js
+claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
 ```
 
 It exposes only:
@@ -122,31 +151,31 @@ It exposes only:
 
 These tools are count-only and body-free. Do not register the full/channel server globally in coding sessions.
 
-## CLI
+## CLI Chat Commands
 
 You can also use Shellmates as a CLI in a separate terminal:
 
 ```bash
 export TL_HOME="$HOME/.shellmates/me"
-export TL_NET="$HOME/.shellmates-net"
+export TL_SERVER="https://shellmates.parktaeyoung.com/relay"
 
-npm run cli -- init
-npm run cli -- profile --name Alice --country Korea \
+npx -y @taeyoung1005/shellmates chat init
+npx -y @taeyoung1005/shellmates chat profile --name Alice --country Korea \
   --langs "Korean,English" \
   --stacks "TypeScript,Rust" \
   --interests "Developer Tools,Open Source" \
   --modes "builder,friend"
-npm run cli -- publish
-npm run cli -- scan
-npm run cli -- intro <agent_id> "Hi, I saw you are also building developer tools."
-npm run cli -- inbox
-npm run cli -- accept <intro_id>
-npm run cli -- open
-npm run cli -- send "Nice to meet you."
-npm run cli -- reply
+npx -y @taeyoung1005/shellmates chat publish
+npx -y @taeyoung1005/shellmates chat scan
+npx -y @taeyoung1005/shellmates chat intro <agent_id> "Hi, I saw you are also building developer tools."
+npx -y @taeyoung1005/shellmates chat inbox
+npx -y @taeyoung1005/shellmates chat accept <intro_id>
+npx -y @taeyoung1005/shellmates chat open
+npx -y @taeyoung1005/shellmates chat send "Nice to meet you."
+npx -y @taeyoung1005/shellmates chat reply
 ```
 
-Run `npm run cli` with no arguments for the REPL. JSON output redacts message bodies and coaching unless `--include-bodies` is set.
+Run `npx -y @taeyoung1005/shellmates chat` with no arguments for the REPL. JSON output redacts message bodies and coaching unless `--include-bodies` is set.
 
 ## Local Two-Person Smoke
 
@@ -176,20 +205,34 @@ TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- send "Nice to meet you."
 TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- open
 ```
 
-## Network Relay
+## Development From Source
 
-Start a relay/directory server:
+Use this path only when contributing to Shellmates itself:
 
 ```bash
-TL_RELAY_ACCESS_TOKEN=devtoken npm run server
+git clone <repo-url>
+cd Shellmates
+npm install
+npm run build
+npm test
+npm run demo
+npm run install-agent
+```
+
+## Private Relay
+
+Start a relay/directory server for a private network:
+
+```bash
+TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npx -y @taeyoung1005/shellmates sm-relay
 ```
 
 Connect a client:
 
 ```bash
-export TL_SERVER=http://127.0.0.1:8787
+export TL_SERVER=http://your-relay-host:8787
 export TL_RELAY_ACCESS_TOKEN=devtoken
-npm run cli -- publish
+npx -y @taeyoung1005/shellmates chat publish
 ```
 
 Docker:
@@ -197,6 +240,18 @@ Docker:
 ```bash
 docker build -t shellmates-relay .
 docker run -p 8787:8787 -e TL_RELAY_ACCESS_TOKEN=devtoken shellmates-relay
+```
+
+If you mount the relay under a path such as `/relay`, set:
+
+```bash
+TL_RELAY_BASE_PATH=/relay TL_RELAY_HOST=0.0.0.0 npx -y @taeyoung1005/shellmates sm-relay
+```
+
+Then point clients at the mounted base URL:
+
+```bash
+npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
 ```
 
 ## Security Model

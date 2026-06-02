@@ -6,9 +6,10 @@ import { isMainEntry } from "../core/entry.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Engine } from "../core/engine.js";
+import { applyChannelArgs } from "../channel/server.js";
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "shellmates", version: "0.1.0" });
+  const server = new McpServer({ name: "shellmates", version: "0.1.1" });
 
   server.registerTool(
     "shellmates_status",
@@ -51,7 +52,8 @@ export function buildServer(): McpServer {
   return server;
 }
 
-async function main(): Promise<void> {
+export async function runThinMcpServer(argv: string[] = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  applyChannelArgs(argv, env);
   const server = buildServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -60,7 +62,7 @@ async function main(): Promise<void> {
 
 const isMain = isMainEntry(import.meta.url);
 if (isMain) {
-  main().catch((e) => {
+  runThinMcpServer().catch((e) => {
     console.error(e);
     process.exit(1);
   });

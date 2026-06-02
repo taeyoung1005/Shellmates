@@ -179,7 +179,7 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
 }
 
 export function buildFullServer(): McpServer {
-  const server = new McpServer({ name: "shellmates-full", version: "0.1.0" });
+  const server = new McpServer({ name: "shellmates-full", version: "0.1.1" });
   registerShellmatesTools(server);
   return server;
 }

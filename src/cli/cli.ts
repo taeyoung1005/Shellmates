@@ -4,6 +4,7 @@ import { createInterface } from "node:readline";
 import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
 import type { CoachingPayload, IntroRecord, MatchResult, ProfileAnswers, MatchingMode } from "../core/types.js";
+import { openShellmates, PACKAGE_HELP, setupShellmates, startShellmates } from "../package/commands.js";
 
 interface Parsed {
   command: string;
@@ -334,12 +335,45 @@ async function repl(engine: Engine): Promise<void> {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  const packageCommand = argv[0];
+  if (packageCommand === "setup") {
+    console.log(setupShellmates(argv.slice(1)));
+    return;
+  }
+  if (packageCommand === "open") {
+    console.log(openShellmates(argv.slice(1)));
+    return;
+  }
+  if (packageCommand === "start") {
+    console.log(startShellmates(argv.slice(1)));
+    return;
+  }
+  if (packageCommand === "sm-channel" || packageCommand === "channel") {
+    const { runChannelServer } = await import("../channel/server.js");
+    await runChannelServer(argv.slice(1));
+    return;
+  }
+  if (packageCommand === "sm-mcp" || packageCommand === "mcp") {
+    const { runThinMcpServer } = await import("../mcp/server.js");
+    await runThinMcpServer(argv.slice(1));
+    return;
+  }
+  if (packageCommand === "sm-relay" || packageCommand === "relay") {
+    const { runRelayServer } = await import("../server/server.js");
+    await runRelayServer();
+    return;
+  }
+  if (packageCommand === "package-help") {
+    console.log(PACKAGE_HELP);
+    return;
+  }
+  const chatArgv = packageCommand === "chat" ? argv.slice(1) : argv;
   const engine = Engine.open();
-  if (argv.length === 0) {
+  if (chatArgv.length === 0) {
     await repl(engine);
     return;
   }
-  const p = parse(argv);
+  const p = parse(chatArgv);
   const out = dispatch(engine, p);
   if (p.json) {
     console.log(JSON.stringify(redactForJson(out.result, p.flags["include-bodies"] === true)));

@@ -13,8 +13,7 @@ The plugin MCP server exposes `shellmates_*` tools that can return message bodie
 The recommended install path is the dedicated directory setup, which keeps the channel isolated:
 
 ```bash
-cd /path/to/Shellmates && npm run build && npm run setup-shellmates
-cd ~/shellmates && claude --dangerously-load-development-channels server:shellmates-channel
+npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
 ```
 
 Use this plugin only per project, or when you explicitly understand the tradeoff.

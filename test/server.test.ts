@@ -144,6 +144,36 @@ test("public stats tracks current active conversations and chat participants fro
   }
 });
 
+test("server supports a mounted API base path for landing plus relay on one host", async () => {
+  const snet = await startNet({ env: { TL_RELAY_BASE_PATH: "/relay" } });
+  try {
+    const id = generateIdentity();
+    const card = signProfile(id, buildProfile(id, ALICE_NET));
+    const put = syncFetch(`${snet.srv.baseUrl}/relay/directory/${id.agent_id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-tl-access": snet.token },
+      body: JSON.stringify(card),
+    });
+    assert.equal(put.status, 200);
+
+    const listed = syncFetch(`${snet.srv.baseUrl}/relay/directory`, {
+      method: "GET",
+      headers: { "x-tl-access": snet.token },
+    });
+    assert.equal(listed.status, 200);
+    assert.ok(JSON.parse(listed.body).cards.some((c: { owner?: string }) => c.owner === id.agent_id));
+
+    const canonicalPath = `/relay/${id.agent_id}`;
+    const poll = syncFetch(`${snet.srv.baseUrl}/relay${canonicalPath}`, {
+      method: "GET",
+      headers: { "x-tl-access": snet.token, authorization: signAuth(id, "GET", canonicalPath) },
+    });
+    assert.equal(poll.status, 200);
+  } finally {
+    await snet.srv.close();
+  }
+});
+
 test("server cannot read plaintext — stored relay file is ciphertext only", () => {
   const alice = netEngine(net, "ct-a");
   const bob = netEngine(net, "ct-b");

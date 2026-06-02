@@ -28,5 +28,5 @@ echo "  /shellmates command : $CC_DIR/shellmates.md"
 echo "  /shellmates-* commands: $CC_DIR/shellmates-{status,open,scan,intro,reply,profile}.md"
 echo "  shellmates skill    : $SKILL_DIR/SKILL.md"
 echo "  Shellmates session  : cd ~/shellmates && claude --dangerously-load-development-channels server:shellmates-channel"
+echo "  relay setup         : public network by default; use setup-shellmates --private <url> or --local-folder <path> to switch"
 echo "Restart Claude Code or open a new session to load /shellmates."
-

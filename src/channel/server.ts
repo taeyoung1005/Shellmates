@@ -115,15 +115,38 @@ function posInt(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
-async function main(): Promise<void> {
-  const intervalMs = Math.max(500, posInt(process.env.TL_CHANNEL_POLL_MS, 2500));
-  const maxChars = posInt(process.env.TL_CHANNEL_MAX_CHARS, 1200);
+export function applyChannelArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): void {
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i]!;
+    const next = argv[i + 1];
+    if (tok === "--server" && next) {
+      env.TL_SERVER = next;
+      delete env.TL_NET;
+      i++;
+    } else if (tok === "--token" && next) {
+      env.TL_RELAY_ACCESS_TOKEN = next;
+      i++;
+    } else if (tok === "--local-folder" && next) {
+      env.TL_NET = next;
+      delete env.TL_SERVER;
+      i++;
+    } else if (tok === "--home" && next) {
+      env.TL_HOME = next;
+      i++;
+    }
+  }
+}
+
+export async function runChannelServer(argv: string[] = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  applyChannelArgs(argv, env);
+  const intervalMs = Math.max(500, posInt(env.TL_CHANNEL_POLL_MS, 2500));
+  const maxChars = posInt(env.TL_CHANNEL_MAX_CHARS, 1200);
   // Keep HTTP polling short so sync fetch cannot block tool handling for too long.
-  if (!process.env.TL_HTTP_TIMEOUT_MS) process.env.TL_HTTP_TIMEOUT_MS = "4000";
+  if (!env.TL_HTTP_TIMEOUT_MS) env.TL_HTTP_TIMEOUT_MS = "4000";
   // One shared engine avoids destructive double-fetch races between polling and tool calls.
-  const engine = Engine.open();
-  const backgroundJob = isClaudeBackgroundJob(process.env);
-  const server = buildRuntimeChannelServer(engine, { maxChars, env: process.env });
+  const engine = Engine.open(env);
+  const backgroundJob = isClaudeBackgroundJob(env);
+  const server = buildRuntimeChannelServer(engine, { maxChars, env });
   await server.connect(new StdioServerTransport());
 
   if (backgroundJob) {
@@ -147,7 +170,7 @@ async function main(): Promise<void> {
 
 const isMain = isMainEntry(import.meta.url);
 if (isMain) {
-  main().catch((e) => {
+  runChannelServer().catch((e) => {
     console.error(e);
     process.exit(1);
   });

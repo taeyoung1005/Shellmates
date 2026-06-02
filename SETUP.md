@@ -11,26 +11,50 @@ The product/runtime name is Shellmates. The physical folder name has not been re
 ## Install
 
 ```bash
-cd /Users/taeyoungpark/Desktop/TerminalLove
-npm install
-npm run build
-npm run install-agent
+npx -y @taeyoung1005/shellmates start
 ```
 
-`install-agent` installs:
+This configures and opens the isolated Claude Code channel session. By default it connects to the public Shellmates relay at `https://shellmates.parktaeyoung.com/relay`.
 
-- `~/.claude/commands/shellmates*.md`
-- `~/.agents/skills/shellmates/SKILL.md`
-- `~/shellmates/.mcp.json` with `shellmates-channel`
+To configure without opening:
 
-Restart Claude Code or open a new session after installation.
+```bash
+npx -y @taeyoung1005/shellmates setup --server https://shellmates.parktaeyoung.com/relay
+```
+
+To open an already configured session:
+
+```bash
+npx -y @taeyoung1005/shellmates open
+```
+
+## Relay Modes
+
+Public network:
+
+```bash
+npx -y @taeyoung1005/shellmates start --server https://shellmates.parktaeyoung.com/relay
+```
+
+This is the right mode when users want global matching through the operator-run relay.
+The landing page can live at `https://shellmates.parktaeyoung.com`, while the relay API is mounted at `https://shellmates.parktaeyoung.com/relay`.
+
+For a private team or company network, self-host a relay and configure each client:
+
+```bash
+TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npx -y @taeyoung1005/shellmates sm-relay
+npx -y @taeyoung1005/shellmates start --private http://your-relay-host:8787 --token devtoken
+```
+
+For a same-machine or shared-folder demo, keep the transport local:
+
+```bash
+npx -y @taeyoung1005/shellmates start --local-folder "$HOME/.shellmates-net"
+```
 
 ## Open The Shellmates Channel Session
 
-```bash
-cd ~/shellmates
-claude --dangerously-load-development-channels server:shellmates-channel
-```
+`npx -y @taeyoung1005/shellmates open` runs `claude --dangerously-load-development-channels server:shellmates-channel` from `~/shellmates`.
 
 This is the only session where message bodies and coaching should appear.
 
@@ -39,7 +63,7 @@ This is the only session where message bodies and coaching should appear.
 Use this only when you want count-only status in an ordinary coding session:
 
 ```bash
-claude mcp add --scope user shellmates -- node /Users/taeyoungpark/Desktop/TerminalLove/dist/src/mcp/server.js
+claude mcp add shellmates -- npx -y @taeyoung1005/shellmates sm-mcp --server https://shellmates.parktaeyoung.com/relay
 ```
 
 Exposed tools:
@@ -77,10 +101,35 @@ TL_HOME="$ROOT/alice" TL_NET="$NET" npm run cli -- send "Nice to meet you."
 TL_HOME="$ROOT/bob" TL_NET="$NET" npm run cli -- open
 ```
 
-## Network Relay Smoke
+## Development From Source
+
+Use this path only when contributing to Shellmates itself:
 
 ```bash
-TL_RELAY_ACCESS_TOKEN=devtoken npm run server
+cd /Users/taeyoungpark/Desktop/TerminalLove
+npm install
+npm run build
+npm run install-agent
+```
+
+`install-agent` installs local source-checkout commands and skill files:
+
+- `~/.claude/commands/shellmates*.md`
+- `~/.agents/skills/shellmates/SKILL.md`
+- `~/shellmates/.mcp.json` with `shellmates-channel`
+
+Restart Claude Code or open a new session after installation.
+
+## Private Relay Smoke
+
+```bash
+TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npm run server
+```
+
+To mount that server below `/relay`, add:
+
+```bash
+TL_RELAY_BASE_PATH=/relay TL_RELAY_HOST=0.0.0.0 TL_RELAY_ACCESS_TOKEN=devtoken npm run server
 ```
 
 In another terminal:
@@ -103,7 +152,9 @@ node scripts/e2e-channel.mjs
 ## Notes
 
 - `TL_HOME` controls the local identity/chat state.
-- `TL_NET` controls the local shared directory/relay path.
-- `TL_SERVER` switches clients to the HTTP relay/directory server.
+- `TL_SERVER` connects a client to the public or private HTTP relay/directory server.
+- `TL_RELAY_BASE_PATH` mounts the relay API below a path such as `/relay`.
+- `TL_NET` controls the local shared directory/relay path for offline demos.
+- `SHELLMATES_PUBLIC_RELAY_URL` overrides the default public relay URL used by `shellmates setup` and `shellmates start`.
 - `SHELLMATES_DIR` changes the isolated Claude Code project directory; default is `~/shellmates`.
 - The Shellmates UI and system text are English. Chat content is human-to-human and can be in any language the users choose.

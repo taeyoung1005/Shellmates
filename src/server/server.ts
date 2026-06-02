@@ -21,6 +21,7 @@ const SERVER_VERSION = "0.2.0";
 export interface ServerConfig {
   host: string;
   port: number;
+  basePath: string;
   dataRoot: string;
   open: boolean;
   accessToken: string | null; // X-TL-Access
@@ -42,6 +43,21 @@ function envInt(name: string, def: number): number {
   if (v === undefined) return def;
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
+}
+
+function normalizeBasePath(raw: string | undefined): string {
+  const trimmed = raw?.trim();
+  if (!trimmed) return "";
+  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const normalized = withSlash.replace(/\/+$/, "");
+  return normalized === "/" ? "" : normalized;
+}
+
+function stripBasePath(path: string, basePath: string): string {
+  if (!basePath) return path;
+  if (path === basePath) return "/";
+  if (path.startsWith(`${basePath}/`)) return path.slice(basePath.length);
+  return path;
 }
 
 function parseIpCountryMap(raw: string | undefined): Map<string, string> {
@@ -74,6 +90,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
   return {
     host: env.TL_RELAY_HOST || "127.0.0.1",
     port: envInt("TL_RELAY_PORT", envInt("PORT", 8787)),
+    basePath: normalizeBasePath(env.TL_RELAY_BASE_PATH),
     dataRoot: resolve(env.TL_SERVER_DATA || "./serverData"),
     open: env.TL_RELAY_OPEN === "true",
     accessToken: env.TL_RELAY_ACCESS_TOKEN?.trim() || null,
@@ -238,7 +255,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     metrics.requests++;
     const method = (req.method || "GET").toUpperCase();
     const url = new URL(req.url || "/", "http://localhost");
-    const path = url.pathname;
+    const path = stripBasePath(url.pathname, cfg.basePath);
     const now = Date.now();
 
     // Internal implementation note.
@@ -469,7 +486,7 @@ export function startServer(cfg: ServerConfig = resolveServerConfig()): Promise<
   });
 }
 
-async function main(): Promise<void> {
+export async function runRelayServer(): Promise<void> {
   const cfg = resolveServerConfig();
   const running = await startServer(cfg);
   const admission = cfg.open ? "OPEN (admission disabled)" : cfg.accessToken ? "TOKEN (X-TL-Access required)" : "WARN NO TOKEN (recommended: set TL_RELAY_ACCESS_TOKEN or TL_RELAY_OPEN=true)";
@@ -488,7 +505,7 @@ async function main(): Promise<void> {
 
 const isMain = isMainEntry(import.meta.url);
 if (isMain) {
-  main().catch((e) => {
+  runRelayServer().catch((e) => {
     console.error(e);
     process.exit(1);
   });

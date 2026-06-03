@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
-import type { Envelope, ProfileCard } from "../core/types.js";
+import type { Envelope, PresenceInfo, ProfileCard } from "../core/types.js";
 import { isAgentId, isPrefixedId } from "../core/util.js";
 
 export interface ServerStoreConfig {
@@ -18,6 +18,8 @@ export interface ServerPublicStats {
   updated_at: string;
   users_attempted_total: number;
   users_by_country: { country_code: string; users: number }[];
+  online_users: number;
+  recently_seen_users: number;
   active_conversations: number;
   active_chat_users: number;
   storage: { cards: number; inboxes: number; envelopes: number };
@@ -26,6 +28,7 @@ export interface ServerPublicStats {
 interface AnalyticsFile {
   agents: Record<string, { country_code: string; first_seen_at: string; last_seen_at: string }>;
   conversations: Record<string, { participants: [string, string]; started_at: string; last_seen_at: string }>;
+  presence: Record<string, { last_seen_at: string }>;
 }
 
 function atomicWrite(path: string, data: string): void {
@@ -51,15 +54,16 @@ export class ServerStore {
   }
 
   private loadAnalytics(): AnalyticsFile {
-    if (!existsSync(this.analyticsPath)) return { agents: {}, conversations: {} };
+    if (!existsSync(this.analyticsPath)) return { agents: {}, conversations: {}, presence: {} };
     try {
       const parsed = JSON.parse(readFileSync(this.analyticsPath, "utf8")) as Partial<AnalyticsFile>;
       return {
         agents: parsed.agents && typeof parsed.agents === "object" ? parsed.agents : {},
         conversations: parsed.conversations && typeof parsed.conversations === "object" ? parsed.conversations : {},
+        presence: parsed.presence && typeof parsed.presence === "object" ? parsed.presence : {},
       };
     } catch {
-      return { agents: {}, conversations: {} };
+      return { agents: {}, conversations: {}, presence: {} };
     }
   }
 
@@ -223,7 +227,30 @@ export class ServerStore {
     }
   }
 
-  publicStats(activeConversationTtlMs: number, now: Date = new Date()): ServerPublicStats {
+  observePresence(agentId: string, now: Date = new Date()): void {
+    if (!isAgentId(agentId)) return;
+    this.analytics.presence[agentId] = { last_seen_at: now.toISOString() };
+    this.saveAnalytics();
+  }
+
+  presenceFor(agentId: string, onlineTtlMs: number, recentTtlMs: number, now: Date = new Date()): PresenceInfo {
+    const seen = this.analytics.presence[agentId]?.last_seen_at;
+    if (!seen) return { status: "offline" };
+    const ageMs = now.getTime() - Date.parse(seen);
+    if (!Number.isFinite(ageMs) || ageMs < 0) return { status: "offline" };
+    const base = { last_seen_at: seen, age_seconds: Math.floor(ageMs / 1000) };
+    if (ageMs <= onlineTtlMs) return { status: "online", ...base };
+    if (ageMs <= recentTtlMs) return { status: "recently_seen", ...base };
+    return { status: "offline", ...base };
+  }
+
+  presenceMap(agentIds: string[], onlineTtlMs: number, recentTtlMs: number, now: Date = new Date()): Record<string, PresenceInfo> {
+    const out: Record<string, PresenceInfo> = {};
+    for (const id of agentIds) out[id] = this.presenceFor(id, onlineTtlMs, recentTtlMs, now);
+    return out;
+  }
+
+  publicStats(activeConversationTtlMs: number, now: Date = new Date(), onlineTtlMs = 60_000, recentTtlMs = 10 * 60_000): ServerPublicStats {
     const nowMs = now.getTime();
     let changed = false;
     for (const [id, conv] of Object.entries(this.analytics.conversations)) {
@@ -243,6 +270,13 @@ export class ServerStore {
       activeUsers.add(conv.participants[0]);
       activeUsers.add(conv.participants[1]);
     }
+    let onlineUsers = 0;
+    let recentlySeenUsers = 0;
+    for (const id of Object.keys(this.analytics.presence)) {
+      const p = this.presenceFor(id, onlineTtlMs, recentTtlMs, now);
+      if (p.status === "online") onlineUsers++;
+      if (p.status === "online" || p.status === "recently_seen") recentlySeenUsers++;
+    }
     const storage = this.stats();
     return {
       updated_at: now.toISOString(),
@@ -250,6 +284,8 @@ export class ServerStore {
       users_by_country: [...countries.entries()]
         .map(([country_code, users]) => ({ country_code, users }))
         .sort((a, b) => b.users - a.users || a.country_code.localeCompare(b.country_code)),
+      online_users: onlineUsers,
+      recently_seen_users: recentlySeenUsers,
       active_conversations: Object.keys(this.analytics.conversations).length,
       active_chat_users: activeUsers.size,
       storage,

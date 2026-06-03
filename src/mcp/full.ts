@@ -95,6 +95,7 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
           languages: m.card.languages,
           stacks: m.card.stacks,
           interests: m.card.interests,
+          presence: m.card.presence ?? { status: "offline" },
           score: m.score,
           reasons: m.reasons,
         })),

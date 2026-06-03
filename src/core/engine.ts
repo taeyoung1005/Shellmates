@@ -354,6 +354,16 @@ export class Engine {
     );
   }
 
+  heartbeat(): void {
+    this.guard(
+      () =>
+        this.rx(() => {
+          if (this.state.identity) this.tp.heartbeat(this.state.identity.agent_id);
+        }),
+      () => undefined,
+    );
+  }
+
   /**
    * Internal implementation note.
    * Internal implementation note.

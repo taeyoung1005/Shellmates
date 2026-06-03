@@ -3,7 +3,7 @@
 import type { Ctx } from "./config.js";
 import { HttpTransport } from "./transport-http.js";
 import { LocalFsTransport } from "./transport-local.js";
-import type { Envelope, Identity, ProfileCard, PublicProfileCard } from "./types.js";
+import type { Envelope, Identity, PresenceInfo, ProfileCard, PublicProfileCard } from "./types.js";
 
 /** Internal implementation note. */
 export interface PolledEnvelope {
@@ -31,6 +31,7 @@ export interface Transport {
   sendEnvelope(env: Envelope): void;
   pollEnvelopes(myAgentId: string): PolledEnvelope[];
   deleteEnvelope(ref: string): void;
+  heartbeat(agentId: string): PresenceInfo | null;
 }
 
 /**

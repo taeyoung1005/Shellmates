@@ -599,7 +599,7 @@
         </div>
         <div class="stat">
           <b id="stat-chat-users">0</b>
-          <span>Active Chat Users</span>
+          <span>Online Now</span>
         </div>
         <div class="stat">
           <b id="stat-conversations">0</b>
@@ -727,6 +727,8 @@ npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
       updated_at: new Date().toISOString(),
       users_attempted_total: 0,
       users_by_country: [],
+      online_users: 0,
+      recently_seen_users: 0,
       active_conversations: 0,
       active_chat_users: 0,
       storage: { cards: 0, inboxes: 0, envelopes: 0 }
@@ -753,7 +755,7 @@ npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
 
     function renderStats(data) {
       setText("stat-users", fmt.format(data.users_attempted_total || 0));
-      setText("stat-chat-users", fmt.format(data.active_chat_users || 0));
+      setText("stat-chat-users", fmt.format(data.online_users || 0));
       setText("stat-conversations", fmt.format(data.active_conversations || 0));
       setText("stat-cards", fmt.format(data.storage?.cards || 0));
       setText("updated-at", new Date(data.updated_at || Date.now()).toLocaleTimeString("en-US", { hour12: false }) + " updated");
@@ -795,7 +797,7 @@ npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
         if (!health.ok) throw new Error("Health response failed");
         const body = await health.json();
         healthOk = body.ok === true;
-        setText("status-health", healthOk ? `${body.service || "relay"} ${body.version || ""}`.trim() : "Unexpected response");
+        setText("status-health", healthOk ? `Relay online ${body.version || ""}`.trim() : "Unexpected response");
       } catch {
         setText("status-health", "Offline");
       }

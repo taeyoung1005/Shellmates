@@ -4,7 +4,7 @@ import type { Ctx } from "./config.js";
 import { lookupCard, publishCard, revokeCard, scanCards } from "./directory.js";
 import { deleteEnvelope, pollEnvelopes, sendEnvelope } from "./relay.js";
 import type { Transport, DirectoryQuery, PolledEnvelope } from "./transport.js";
-import type { Envelope, ProfileCard, PublicProfileCard } from "./types.js";
+import type { Envelope, PresenceInfo, ProfileCard, PublicProfileCard } from "./types.js";
 
 export class LocalFsTransport implements Transport {
   constructor(private readonly ctx: Ctx) {}
@@ -37,5 +37,10 @@ export class LocalFsTransport implements Transport {
 
   deleteEnvelope(ref: string): void {
     deleteEnvelope(ref);
+  }
+
+  heartbeat(_agentId: string): PresenceInfo | null {
+    void _agentId;
+    return null;
   }
 }

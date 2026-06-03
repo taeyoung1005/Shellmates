@@ -72,7 +72,7 @@ Shellmates is built around a context firewall:
 
 - Human message bodies appear only in the isolated Shellmates session.
 - Reply coaching happens only in that isolated session.
-- The relay stores ciphertext, signed public profile cards, and aggregate metadata.
+- The relay stores ciphertext, signed public profile cards, and aggregate metadata, including recent-session presence counts.
 - Peer messages are treated as untrusted input and are flagged when they look like prompt injection.
 - The agent suggests tone and direction; it sends a message only when the user provides exact text to send.
 

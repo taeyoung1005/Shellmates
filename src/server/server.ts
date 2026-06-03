@@ -36,6 +36,8 @@ export interface ServerConfig {
   trustProxy: boolean;
   ipCountryMap: Map<string, string>;
   activeConversationTtlMs: number;
+  presenceOnlineTtlMs: number;
+  presenceRecentTtlMs: number;
 }
 
 function envInt(name: string, def: number): number {
@@ -105,6 +107,8 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
     trustProxy: env.TL_TRUST_PROXY === "true",
     ipCountryMap: parseIpCountryMap(env.TL_IP_COUNTRY_MAP),
     activeConversationTtlMs: envInt("TL_ACTIVE_CHAT_TTL_MS", 24 * 60 * 60 * 1000),
+    presenceOnlineTtlMs: envInt("TL_PRESENCE_ONLINE_TTL_MS", 60 * 1000),
+    presenceRecentTtlMs: envInt("TL_PRESENCE_RECENT_TTL_MS", 10 * 60 * 1000),
   };
 }
 
@@ -283,7 +287,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     }
 
     if (method === "GET" && path === "/public-stats") {
-      sendPublicStatus(res, 200, store.publicStats(cfg.activeConversationTtlMs, new Date(now)));
+      sendPublicStatus(res, 200, store.publicStats(cfg.activeConversationTtlMs, new Date(now), cfg.presenceOnlineTtlMs, cfg.presenceRecentTtlMs));
       return;
     }
 
@@ -309,7 +313,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     try {
       // ── /metrics ──
       if (method === "GET" && path === "/metrics") {
-        send(res, 200, { ...metrics, stats: store.stats(), public_stats: store.publicStats(cfg.activeConversationTtlMs, new Date(now)) });
+        send(res, 200, { ...metrics, stats: store.stats(), public_stats: store.publicStats(cfg.activeConversationTtlMs, new Date(now), cfg.presenceOnlineTtlMs, cfg.presenceRecentTtlMs) });
         return;
       }
 
@@ -322,7 +326,20 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
           country: url.searchParams.get("country") || undefined,
           cursor: url.searchParams.get("cursor") || undefined,
         });
-        send(res, 200, { cards, next_cursor: nextCursor });
+        send(res, 200, {
+          cards,
+          next_cursor: nextCursor,
+          presence: store.presenceMap(cards.map((c) => c.owner), cfg.presenceOnlineTtlMs, cfg.presenceRecentTtlMs, new Date(now)),
+        });
+        return;
+      }
+
+      const presenceMatch = path.match(/^\/presence\/(agent_[0-9a-f]{16})$/);
+      if (presenceMatch && method === "POST") {
+        const agentId = presenceMatch[1]!;
+        if (!requireOwner(req, res, "POST", path, agentId)) return;
+        store.observePresence(agentId, new Date(now));
+        send(res, 200, { ok: true, presence: store.presenceFor(agentId, cfg.presenceOnlineTtlMs, cfg.presenceRecentTtlMs, new Date(now)) });
         return;
       }
 

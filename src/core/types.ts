@@ -49,7 +49,13 @@ export interface ProfileCard {
 }
 
 /** Internal implementation note. */
-export type PublicProfileCard = ProfileCard;
+export interface PresenceInfo {
+  status: "online" | "recently_seen" | "offline";
+  last_seen_at?: string;
+  age_seconds?: number;
+}
+
+export type PublicProfileCard = ProfileCard & { presence?: PresenceInfo };
 
 /** Internal implementation note. */
 export interface ProfileAnswers {

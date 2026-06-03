@@ -57,9 +57,10 @@ function renderMatches(matches: MatchResult[]): string {
     .map((m, i) => {
       const c = m.card;
       const name = c.display_name ?? c.owner;
+      const presence = c.presence?.status ?? "offline";
       return [
         `  [${i + 1}] ${c.owner}  ${name}`,
-        `      ${c.country} · ${c.languages.join("/")} · ${c.stacks.slice(0, 4).join(", ")}  — ${m.score}%`,
+        `      ${c.country} · ${c.languages.join("/")} · ${c.stacks.slice(0, 4).join(", ")} · ${presence}  — ${m.score}%`,
         `      why: ${m.reasons.slice(0, 3).join(" / ")}`,
       ].join("\n");
     })

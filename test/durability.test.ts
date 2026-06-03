@@ -9,7 +9,7 @@ import { Engine } from "../src/core/engine.js";
 import { HttpTransport } from "../src/core/transport-http.js";
 import { LocalFsTransport } from "../src/core/transport-local.js";
 import type { Transport, PolledEnvelope, DirectoryQuery } from "../src/core/transport.js";
-import type { Envelope, ProfileCard, PublicProfileCard } from "../src/core/types.js";
+import type { Envelope, PresenceInfo, ProfileCard, PublicProfileCard } from "../src/core/types.js";
 import { ALICE, BOB, tempRoot } from "./helpers.js";
 
 // Internal implementation note.
@@ -39,6 +39,9 @@ class ChaosTransport implements Transport {
   }
   deleteEnvelope(ref: string): void {
     this.inner.deleteEnvelope(ref);
+  }
+  heartbeat(agentId: string): PresenceInfo | null {
+    return this.inner.heartbeat(agentId);
   }
 }
 

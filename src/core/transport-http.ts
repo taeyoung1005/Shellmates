@@ -6,7 +6,7 @@ import { signAuth } from "./crypto.js";
 import { verifyCard } from "./profile.js";
 import { syncFetch, type SyncResponse } from "./sync-fetch.js";
 import type { Transport, DirectoryQuery, PolledEnvelope } from "./transport.js";
-import type { Envelope, Identity, ProfileCard, PublicProfileCard } from "./types.js";
+import type { Envelope, Identity, PresenceInfo, ProfileCard, PublicProfileCard } from "./types.js";
 import { isAgentId } from "./util.js";
 
 export class HttpTransport implements Transport {
@@ -108,13 +108,13 @@ export class HttpTransport implements Transport {
         more = false;
         break;
       }
-      const data = HttpTransport.parseJson(res) as { cards?: unknown; next_cursor?: unknown } | null;
+      const data = HttpTransport.parseJson(res) as { cards?: unknown; next_cursor?: unknown; presence?: Record<string, PresenceInfo> } | null;
       // Internal implementation note.
       const cards = Array.isArray(data?.cards) ? (data!.cards as ProfileCard[]) : [];
       // Internal implementation note.
       for (const c of cards) {
         try {
-          if (verifyCard(c, now).ok) out.push(c);
+          if (verifyCard(c, now).ok) out.push({ ...c, presence: data?.presence?.[c.owner] ?? { status: "offline" } });
         } catch {
           /* Internal implementation note. */
         }
@@ -174,5 +174,14 @@ export class HttpTransport implements Transport {
     const path = `/relay/${id.agent_id}/${ref}`;
     // Internal implementation note.
     this.safeFetch(this.url(path), { method: "DELETE", headers: this.authHeaders("DELETE", path), timeoutMs: this.readTimeoutMs });
+  }
+
+  heartbeat(agentId: string): PresenceInfo | null {
+    if (!isAgentId(agentId)) return null;
+    const path = `/presence/${agentId}`;
+    const res = this.safeFetch(this.url(path), { method: "POST", headers: this.authHeaders("POST", path), timeoutMs: this.writeTimeoutMs });
+    if (!res || res.status >= 300) return null;
+    const data = HttpTransport.parseJson(res) as { presence?: PresenceInfo } | null;
+    return data?.presence ?? null;
   }
 }

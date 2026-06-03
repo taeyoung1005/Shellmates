@@ -182,6 +182,7 @@ export function applyChannelArgs(argv: string[], env: NodeJS.ProcessEnv = proces
 export async function runChannelServer(argv: string[] = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env): Promise<void> {
   applyChannelArgs(argv, env);
   const intervalMs = Math.max(500, posInt(env.TL_CHANNEL_POLL_MS, 2500));
+  const heartbeatMs = Math.max(5000, posInt(env.TL_CHANNEL_HEARTBEAT_MS, 20_000));
   const maxChars = posInt(env.TL_CHANNEL_MAX_CHARS, 1200);
   // Keep HTTP polling short so sync fetch cannot block tool handling for too long.
   if (!env.TL_HTTP_TIMEOUT_MS) env.TL_HTTP_TIMEOUT_MS = "4000";
@@ -200,6 +201,7 @@ export async function runChannelServer(argv: string[] = process.argv.slice(2), e
     process.stderr.write("Shellmates channel: no identity. Run `shellmates init`, then create and publish a profile.\n");
   }
   process.stderr.write(`Shellmates channel connected. Relay watch every ${intervalMs}ms. Use only in the dedicated Shellmates session.\n`);
+  engine.heartbeat();
 
   setTimeout(() => {
     void pushOnboardingNotification(server).catch((e) => {
@@ -212,8 +214,12 @@ export async function runChannelServer(argv: string[] = process.argv.slice(2), e
       process.stderr.write(`channel tick error: ${(e as Error).message}\n`);
     });
   }, intervalMs);
+  const heartbeatTimer = setInterval(() => {
+    engine.heartbeat();
+  }, heartbeatMs);
   // Let stdio shutdown terminate the process naturally.
   if (typeof timer.unref === "function") timer.unref();
+  if (typeof heartbeatTimer.unref === "function") heartbeatTimer.unref();
 }
 
 const isMain = isMainEntry(import.meta.url);

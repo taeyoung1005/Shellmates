@@ -161,6 +161,59 @@ test("public stats tracks current active conversations and chat participants fro
   }
 });
 
+test("presence heartbeat reports online users publicly and decorates directory scan results", async () => {
+  const snet = await startNet({
+    env: {
+      TL_PRESENCE_ONLINE_TTL_MS: "1000",
+      TL_PRESENCE_RECENT_TTL_MS: "2000",
+    },
+  });
+  try {
+    const alice = netEngine(snet, "presence-a");
+    const bob = netEngine(snet, "presence-b");
+    alice.init();
+    bob.init();
+    const bobId = bob.agentId!;
+    alice.makeProfile({ country: "Korea", languages: ["Korean"], stacks: ["TypeScript"], interests: ["AI Products"], matching_modes: ["dating", "builder"] });
+    alice.publish();
+    bob.makeProfile({ country: "Spain", languages: ["English"], stacks: ["TypeScript"], interests: ["AI Products"], matching_modes: ["dating", "builder"] });
+    bob.publish();
+
+    const before = JSON.parse(syncFetch(`${snet.srv.baseUrl}/public-stats`, { method: "GET" }).body) as {
+      online_users?: number;
+      recently_seen_users?: number;
+    };
+    assert.equal(before.online_users, 0);
+    assert.equal(before.recently_seen_users, 0);
+    assert.equal(alice.scan().matches.find((m) => m.card.owner === bobId)?.card.presence?.status, "offline");
+
+    const path = `/presence/${bobId}`;
+    const beat = syncFetch(`${snet.srv.baseUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tl-access": snet.token, authorization: signAuth(bob.state.identity!, "POST", path) },
+    });
+    assert.equal(beat.status, 200);
+
+    const online = JSON.parse(syncFetch(`${snet.srv.baseUrl}/public-stats`, { method: "GET" }).body) as {
+      online_users?: number;
+      recently_seen_users?: number;
+    };
+    assert.equal(online.online_users, 1);
+    assert.equal(online.recently_seen_users, 1);
+    const match = alice.scan().matches.find((m) => m.card.owner === bobId);
+    assert.equal(match?.card.presence?.status, "online");
+    assert.ok(typeof match?.card.presence?.last_seen_at === "string");
+
+    await new Promise((resolve) => setTimeout(resolve, 1150));
+    assert.equal(alice.scan().matches.find((m) => m.card.owner === bobId)?.card.presence?.status, "recently_seen");
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    assert.equal(alice.scan().matches.find((m) => m.card.owner === bobId)?.card.presence?.status, "offline");
+  } finally {
+    await snet.srv.close();
+  }
+});
+
 test("server supports a mounted API base path for landing plus relay on one host", async () => {
   const snet = await startNet({ env: { TL_RELAY_BASE_PATH: "/relay" } });
   try {

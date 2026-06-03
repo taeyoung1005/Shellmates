@@ -32,3 +32,13 @@ test("GitHub-bound files and landing pages contain no Korean user-facing text", 
   });
   assert.deepEqual(offenders, []);
 });
+
+test("landing distinguishes relay health from human online presence", () => {
+  const landing = readFileSync(join(ROOT, "landing.template.html"), "utf8");
+  const worker = readFileSync(join(ROOT, "worker/public/index.html"), "utf8");
+  for (const html of [landing, worker]) {
+    assert.match(html, /Relay online/);
+    assert.match(html, /Online Now/);
+    assert.match(html, /online_users/);
+  }
+});

@@ -127,4 +127,4 @@ Relay state is stored in the named Docker volume `shellmates-data`.
 - The relay runs with `TL_RELAY_OPEN=true`, so admission is open by design for public matching.
 - Cloudflare should enforce basic WAF and rate limiting for `/relay/*`.
 - The origin port is published on `127.0.0.1:8788` (container port `8787`), not a public interface.
-- Message bodies are end-to-end encrypted; the relay stores signed profiles, encrypted envelopes, and aggregate public stats.
+- Message bodies are end-to-end encrypted; the relay stores signed profiles, encrypted envelopes, and aggregate public stats, including recent-session presence counts.

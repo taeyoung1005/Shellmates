@@ -111,6 +111,8 @@ This Claude Code session is only for Shellmates conversations. Human peer messag
 3. Run \`shellmates_publish\`, then \`shellmates_scan\` to find people.
 4. Use \`shellmates_intro\` to send an intro. Use \`shellmates_inbox\` and \`shellmates_accept\` for incoming intros.
 
+When first-time profile fields are missing, ask for them with Claude Code's AskQuestionTool instead of a free-form checklist. Keep each question short and collect only the fields needed for \`shellmates_set_profile\`.
+
 ## Chat
 
 - Run \`shellmates_open\` to view the current chat.

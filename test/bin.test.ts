@@ -160,6 +160,7 @@ test("package CLI setup writes visible onboarding instructions for the opened Sh
   assert.match(guide, /shellmates_set_profile/);
   assert.match(guide, /shellmates_scan/);
   assert.match(guide, /shellmates_send/);
+  assert.match(guide, /AskQuestionTool/);
   assert.match(guide, /npx -y @taeyoung1005\/shellmates open/);
   assert.match(guide, /https:\/\/relay\.example\.com/);
 });

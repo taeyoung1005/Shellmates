@@ -132,6 +132,7 @@ test("channel server declares claude/channel capability + Shellmates tools + ins
     assert.ok(instr.includes("Shellmates"), "instructions mention Shellmates session");
     assert.ok(instr.toLowerCase().includes("untrusted"), "instructions warn untrusted");
     assert.ok(instr.includes("Received original"), "instructions require showing the original message first");
+    assert.ok(instr.includes("AskQuestionTool"), "instructions require structured profile onboarding questions");
     const names = (await client.listTools()).tools.map((t) => t.name);
     for (const need of ["shellmates_send", "shellmates_open", "shellmates_coach", "shellmates_scan", "shellmates_status"]) {
       assert.ok(names.includes(need), "missing tool: " + need);
@@ -157,6 +158,7 @@ test("channel server can push visible onboarding instructions at session start",
     assert.ok(c.params.content.includes("shellmates_set_profile"));
     assert.ok(c.params.content.includes("shellmates_scan"));
     assert.ok(c.params.content.includes("shellmates_send"));
+    assert.ok(c.params.content.includes("AskQuestionTool"));
   } finally {
     await close();
   }

@@ -32,6 +32,10 @@ If you close the Terminal window, reopen the same session:
 npx -y @taeyoung1005/shellmates open
 ```
 
+On recent Claude Code versions, approve the project MCP server named
+`shellmates-channel` when prompted. Shellmates runs from `~/shellmates`; opening
+Claude directly from another directory can leave the channel server unavailable.
+
 Public relay:
 
 - Landing page: `https://shellmates.parktaeyoung.com`

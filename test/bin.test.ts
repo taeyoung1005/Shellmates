@@ -202,14 +202,18 @@ test("package CLI setup supports private relay and local folder modes", () => {
 
 test("package CLI open --print shows the Claude channel command without opening Terminal", () => {
   const { out } = runPackageCli(["open", "--print"]);
-  assert.match(out, /cd .*shellmates"? && claude --dangerously-load-development-channels server:shellmates-channel/);
+  assert.match(
+    out,
+    /cd .*shellmates"? && claude --mcp-config .*\.mcp\.json"? --dangerously-load-development-channels server:shellmates-channel/,
+  );
   assert.doesNotMatch(out, /cat CLAUDE\.md/);
-  assert.match(out, /claude --dangerously-load-development-channels server:shellmates-channel/);
+  assert.match(out, /approve `shellmates-channel`/);
+  assert.match(out, /--dangerously-load-development-channels server:shellmates-channel/);
 });
 
 test("package CLI start --print configures then shows the Claude channel command", () => {
   const { out, home } = runPackageCli(["start", "--server", "https://relay.example.com", "--print"]);
   assert.ok(existsSync(join(home, "shellmates", ".mcp.json")), "start should configure the channel session");
   assert.match(out, /relay mode\s+: public network \(https:\/\/relay\.example\.com\)/);
-  assert.match(out, /claude --dangerously-load-development-channels server:shellmates-channel/);
+  assert.match(out, /claude --mcp-config .*\.mcp\.json"? --dangerously-load-development-channels server:shellmates-channel/);
 });

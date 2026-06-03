@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const DEFAULT_PUBLIC_RELAY = "https://shellmates.parktaeyoung.com/relay";
 const CHANNEL_SERVER_NAME = "shellmates-channel";
-const CLAUDE_CHANNEL_CMD = `claude --dangerously-load-development-channels server:${CHANNEL_SERVER_NAME}`;
+const CLAUDE_CHANNEL_PROMPT = `server:${CHANNEL_SERVER_NAME}`;
 const PACKAGE_NAME = "@taeyoung1005/shellmates";
 const NPX_CMD = `npx -y ${PACKAGE_NAME}`;
 
@@ -171,13 +171,22 @@ export function setupShellmates(argv: string[], env: NodeJS.ProcessEnv = process
 export function openShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {
   const { flags } = parsePackageArgs(argv);
   const shellmatesDir = stringFlag(flags, "dir") || env.SHELLMATES_DIR || join(envHome(env), "shellmates");
-  const command = `cd ${JSON.stringify(shellmatesDir)} && ${CLAUDE_CHANNEL_CMD}`;
   const configPath = join(shellmatesDir, ".mcp.json");
+  const claudeCmd = [
+    "claude",
+    "--mcp-config",
+    JSON.stringify(configPath),
+    "--dangerously-load-development-channels",
+    CLAUDE_CHANNEL_PROMPT,
+  ].join(" ");
+  const command = `cd ${JSON.stringify(shellmatesDir)} && ${claudeCmd}`;
   const prefix = existsSync(configPath)
     ? "Open the Shellmates channel session:"
     : `Shellmates is not configured yet. Run \`${NPX_CMD} setup\` first, or run \`${NPX_CMD} start\`.`;
+  const approvalHint =
+    "If Claude Code asks to approve the project MCP server, approve `shellmates-channel` to enable live channel messages.";
 
-  if (flags.print === true) return `${prefix}\n  ${command}`;
+  if (flags.print === true) return `${prefix}\n  ${command}\n\n${approvalHint}`;
 
   if (process.platform === "darwin" && existsSync("/usr/bin/osascript")) {
     const script = [
@@ -187,10 +196,10 @@ export function openShellmates(argv: string[], env: NodeJS.ProcessEnv = process.
       "end tell",
     ].join("\n");
     const res = spawnSync("/usr/bin/osascript", [], { input: script, encoding: "utf8" });
-    if (res.status === 0) return "Opened the Shellmates channel session in Terminal.";
+    if (res.status === 0) return `Opened the Shellmates channel session in Terminal.\n${approvalHint}`;
   }
 
-  return `${prefix}\n  ${command}`;
+  return `${prefix}\n  ${command}\n\n${approvalHint}`;
 }
 
 export function startShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {

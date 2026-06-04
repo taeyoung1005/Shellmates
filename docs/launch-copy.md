@@ -26,37 +26,39 @@ Avoid:
 
 ## X / Twitter
 
+### Platform Strategy
+
+For X, lead with the capability: Claude Code can now help you talk in real time with other people who share similar interests. The video is proof, but the post should make the promise clear in one pass.
+
 ### Two-MacBook Demo Post
 
 Use this with the video of two MacBooks running Claude Code and talking through Shellmates.
 
 ```text
-I put Claude Code on two MacBooks and made them help two humans meet.
+Claude Code can now help you talk in real time with people who share your interests.
 
-Not agent-to-agent chat.
-Not automated dating.
+I built Shellmates as an open-source relay for human-to-human intros inside Claude Code.
 
-Two people.
+Two MacBooks.
 Two Claude Code sessions.
 One encrypted relay.
 
-Claude helps with intros and reply direction.
-Humans send the actual messages.
+Claude helps with profile setup, matching, and reply direction.
+Humans send the messages.
 
 npx -y @taeyoung1005/shellmates start
 
-Open source:
 https://github.com/taeyoung1005/Shellmates
 ```
 
 ### Two-MacBook Demo Short Post
 
 ```text
-Two MacBooks.
-Two Claude Code sessions.
-One weird open-source relay for human intros.
+Claude Code, but for meeting people with similar interests.
 
-I built Shellmates to see if Claude Code could help people meet other builders, not just write code.
+Two laptops.
+Two Claude Code sessions.
+Real-time human chat through Shellmates.
 
 npx -y @taeyoung1005/shellmates start
 ```
@@ -185,6 +187,10 @@ npx -y @taeyoung1005/shellmates start
 
 ## Product Hunt
 
+### Platform Strategy
+
+For Product Hunt, explain the product as an open-source Claude Code relay with multiple possible use cases: live collaboration, dating/intros, hackathons, startup building, and global builder communities. The video is proof that two separate Claude Code sessions can talk through the relay.
+
 ### Product Name
 
 ```text
@@ -210,27 +216,27 @@ Human-to-human matching, assisted by your coding agent
 ### Short Description
 
 ```text
-Shellmates is an open-source relay for meeting other builders from an isolated Claude Code session. Your agent helps with profile setup, matching, intros, and reply direction. The public relay routes encrypted envelopes; humans still write and send the messages.
+Shellmates is an open-source Claude Code relay for real-time human connection. It lets separate Claude Code sessions discover people, say hi, and chat through an encrypted relay. Use it for builder matching, team collaboration, dating-style intros, hackathons, or startup building across countries.
 ```
 
 ### Launch Video Caption
 
 ```text
-In the demo, two MacBooks run separate Claude Code sessions and connect through Shellmates. One person sends an intro, the other receives a live notification, Claude suggests reply direction, and the human sends the actual message.
+The demo shows two separate Claude Code sessions connected through Shellmates: one person sends an intro, the other receives it live, Claude suggests reply direction, and the human sends the actual message.
 ```
 
 ### Maker Comment
 
 ```text
-I built Shellmates because I use Claude Code all day and started wondering what would happen if my coding agent helped with the human side of building too.
+I built Shellmates because Claude Code has become one of my main work surfaces, and I started wondering whether it could connect people, not just help them write code.
 
-The first idea was simple: could Claude Code help me with intros or even dating-style matching?
+The first idea was simple: could Claude Code help with intros or dating-style matching?
 
-The launch video shows the simplest version: two MacBooks, two Claude Code sessions, and one intro routed through Shellmates.
+The launch video shows the simplest version of that idea: two MacBooks, two Claude Code sessions, and one intro routed through Shellmates.
 
-After building the first version, I think the better use case may be broader: finding other builders, project collaborators, founder friends, or small private communities.
+After building the first version, I think the useful version may be broader. If Shellmates is shaped well, Claude Code users could talk to teammates while working, meet people with similar interests, find collaborators for hackathons, build startups with people in other countries, or run private builder communities around their own relay.
 
-The public relay is live, but the project is intentionally open source. The relay stores signed public profile cards, encrypted envelopes, and aggregate stats. Message bodies are encrypted before they reach the relay, and the Shellmates chat runs in a separate Claude Code session so ordinary coding context stays separate.
+Shellmates runs in a separate Claude Code session so normal coding context stays separate from human messages. The public relay is live, but the project is intentionally open source. The relay stores signed public profile cards, encrypted envelopes, and aggregate stats. Message bodies are encrypted before they reach the relay.
 
 Install:
 
@@ -276,6 +282,10 @@ Self-host a private relay for your team or community.
 
 ## Reddit
 
+### Platform Strategy
+
+For Reddit, be plain and honest: "I had this idea, I made a rough open-source version, here is what it does, here is what the relay stores, please review the code/security/privacy model." Avoid Product Hunt-style big future claims.
+
 Use this as the general post for `r/ClaudeCode`, `r/opensource`, `r/SideProject`, and similar communities. Adjust the first paragraph per subreddit.
 
 ### Title Options
@@ -305,9 +315,11 @@ Use this when uploading the two-MacBook demo directly to Reddit.
 ```text
 I built an open-source Claude Code relay for meeting other builders.
 
-The video is a simple two-laptop demo: one MacBook sends an intro from Claude Code, the other MacBook receives it in a separate Claude Code session, and Claude helps with reply direction before the human sends the actual message.
+I made it because I use Claude Code all day and started wondering whether it could help with the human side too.
 
-The original idea was honestly a little weird. I use Claude Code all day, and I wondered what it would feel like if my coding agent could also help me meet people.
+The first idea was honestly a little weird: could Claude Code help with intros or dating-style matching?
+
+The video is just the easiest way to show the current version: two laptops, two Claude Code sessions, one intro routed through Shellmates.
 
 Not AI agents dating each other.
 Not automated messages.
@@ -329,9 +341,9 @@ Right now I’m operating the public relay myself. If you look at the code, it s
 
 The relay is not supposed to read message bodies. It mainly routes encrypted envelopes between users.
 
-This is my first time building something like this, so I’m sure there are rough edges in the protocol, UX, security model, and code structure. I’d genuinely appreciate review, issues, PRs, or blunt feedback.
+This is my first time building this kind of relay, so I’m sure there are rough edges in the protocol, UX, security model, and code structure. I’d genuinely appreciate review, issues, PRs, or blunt feedback.
 
-I started with the idea of Claude Code helping with dating/intros. After building it, I think it might be more useful for meeting similar builders, finding project collaborators, or creating small private communities around a relay.
+I started with dating/intros, but after building it I think it might be more useful for meeting similar builders, finding project collaborators, or creating small private communities around a relay.
 
 Repo:
 https://github.com/taeyoung1005/Shellmates
@@ -469,3 +481,48 @@ npx -y @taeyoung1005/shellmates start
 - Do not claim the relay stores nothing.
 - Ask for specific review: privacy, protocol, security, onboarding.
 - Do not cross-post the exact same title/body everywhere.
+
+## Video Asset Matrix
+
+| Platform | Primary Asset | Caption Direction |
+| --- | --- | --- |
+| X teaser / reply | `video/renders/shellmates-teaser-15s.mp4` | Weird experiment, one relay, real-time Claude Code intros |
+| X launch | `video/renders/shellmates-launch-30s.mp4` | Similar interests, translation, Claude-assisted replies |
+| Reddit | `video/renders/shellmates-animated-demo.mp4` | Honest open-source experiment, ask for code/privacy/protocol review |
+| Product Hunt | `video/renders/shellmates-launch-30s.mp4` | Product value: friends, dates, teammates, hackathons, global building |
+| Reels / Shorts | `video/renders/shellmates-teaser-15s.mp4` | Visual hook first, minimal explanation |
+
+## Launch Asset Captions
+
+### X Teaser With 15s Video
+
+```text
+Claude Code can now introduce two strangers.
+
+Same interests.
+Different countries.
+One relay.
+
+Korea sends 안녕하세요.
+The U.S. sees Hello.
+
+npx -y @taeyoung1005/shellmates start
+```
+
+### X / Product Hunt With 30s Video
+
+```text
+Shellmates connects two Claude Code sessions through a public relay.
+
+It can match people by interests, translate an intro, and let Claude coach the reply while humans decide what to send.
+
+Use it for friends, dates, collaborators, teams, hackathons, or remote builder communities.
+```
+
+### Reddit With Full Demo
+
+```text
+This is the longer demo of the current open-source experiment.
+
+It shows two people, a public relay, encrypted envelopes, translation, and Claude-assisted reply coaching. The parts I most want reviewed are onboarding, privacy, protocol, and security assumptions.
+```

@@ -10,6 +10,13 @@ Shellmates is open-source people-to-people messaging for Claude Code. Your codin
 
 The main chat runs in a separate Shellmates session. Your ordinary coding sessions stay clean, and the public relay cannot read message bodies.
 
+## Demo
+
+Watch the launch demo: Shellmates connects two Claude Code sessions through the public relay, translates a Korean hello into English for the recipient, and lets Claude coach the reply while humans decide what to send.
+
+> Video asset: `video/renders/shellmates-launch-30s.mp4`<br>
+> Poster: `video/renders/shellmates-thumbnail.png`
+
 ## Quick Start
 
 Requirements:

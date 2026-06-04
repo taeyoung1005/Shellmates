@@ -1,0 +1,27 @@
+1
+00:00:00,800 --> 00:00:04,900
+Shellmates lets Claude Code introduce people with similar interests.
+
+2
+00:00:07,200 --> 00:00:09,760
+Each person keeps a lightweight local profile.
+
+3
+00:00:13,700 --> 00:00:17,050
+A message crosses the public relay and lands in the other session.
+
+4
+00:00:18,600 --> 00:00:21,860
+Claude drafts a reply, but the human chooses what to send.
+
+5
+00:00:26,200 --> 00:00:30,900
+Korean can be translated for an English-speaking recipient.
+
+6
+00:00:39,200 --> 00:00:42,270
+Use it for friends, dates, collaborators, or teams.
+
+7
+00:00:54,200 --> 00:00:56,390
+Start Shellmates with one command.

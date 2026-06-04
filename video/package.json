@@ -1,0 +1,34 @@
+{
+  "name": "shellmates-launch-video",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render:x": "remotion render src/index.ts XTeaser renders/x-teaser.mp4",
+    "render:reddit": "remotion render src/index.ts RedditOpenSource renders/reddit-open-source.mp4",
+    "render:ph": "remotion render src/index.ts ProductHuntLaunch renders/product-hunt-launch.mp4",
+    "render:demo": "remotion render src/index.ts ShellmatesAnimatedDemo renders/shellmates-animated-demo.mp4",
+    "render:teaser15": "remotion render src/index.ts ShellmatesTeaser15 renders/shellmates-teaser-15s.mp4 --concurrency=2",
+    "render:launch30": "remotion render src/index.ts ShellmatesLaunch30 renders/shellmates-launch-30s.mp4 --concurrency=2",
+    "render:thumbnail": "remotion still src/index.ts ShellmatesThumbnail renders/shellmates-thumbnail.png",
+    "render:all": "npm run render:x && npm run render:reddit && npm run render:ph && npm run render:demo && npm run render:teaser15 && npm run render:launch30 && npm run render:thumbnail",
+    "voiceover:demo": "node scripts/generate-demo-voiceover.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.472",
+    "@remotion/media": "4.0.472",
+    "@remotion/renderer": "4.0.472",
+    "@types/d3-geo": "^3.1.0",
+    "@types/topojson-client": "^3.1.5",
+    "d3-geo": "^3.1.1",
+    "remotion": "4.0.472",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

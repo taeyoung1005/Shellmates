@@ -554,6 +554,66 @@
       margin: 0 18px 18px;
     }
 
+    .demo-section {
+      display: grid;
+      grid-template-columns: 0.82fr 1.18fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .demo-section .section-title {
+      margin-bottom: 0;
+    }
+
+    .demo-section code {
+      color: #f4f5f0;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+
+    .demo-poster {
+      min-height: 330px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 28%, rgba(213, 155, 61, 0.2), transparent 22%),
+        radial-gradient(circle at 82% 36%, rgba(24, 182, 166, 0.18), transparent 25%),
+        linear-gradient(135deg, #05070a 0%, #0b1216 48%, #11100c 100%);
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.34);
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr 1fr;
+      align-content: end;
+    }
+
+    .demo-poster::before {
+      content: "Two strangers. One Claude Code relay.";
+      grid-column: 1 / -1;
+      color: #f4f5f0;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.04;
+      font-weight: 900;
+      max-width: 660px;
+    }
+
+    .demo-terminal {
+      min-height: 146px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(5, 6, 8, 0.86);
+      color: #d6d7d3;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .demo-terminal .ok { color: var(--teal); }
+    .demo-terminal .agent { color: var(--amber); }
+
     footer {
       padding: 32px 0 48px;
       color: var(--muted);
@@ -576,6 +636,12 @@
       .stat:last-child, .relay-check:last-child { border-bottom: 0; }
       .nav-links { display: none; }
       .map-wrap { min-height: 260px; }
+      .demo-section {
+        grid-template-columns: 1fr;
+      }
+      .demo-poster {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -695,6 +761,33 @@
           <p>Messages travel as encrypted envelopes. The relay facilitates transmission without ever decrypting contents.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="shell demo-section" aria-labelledby="demo-title">
+      <div class="section-title">
+        <div class="kicker mono">Demo</div>
+        <h2 id="demo-title">Two strangers. One Claude Code relay.</h2>
+        <p>
+          Korea sends <code>&#50504;&#45397;&#54616;&#49464;&#50836;</code>. The English-speaking recipient sees <code>Hello</code>.
+          Claude helps draft the reply, but people choose what to send.
+        </p>
+      </div>
+      <a class="demo-poster" href="https://github.com/taeyoung1005/Shellmates" aria-label="Open Shellmates demo video">
+        <div class="demo-terminal mono">
+          <div class="ok">Shellmates: matched with Ken</div>
+          <div>You: &#50504;&#45397;&#54616;&#49464;&#50836;</div>
+          <div class="ok">Relay: translated for Ken</div>
+          <div class="agent">Claude: Keep it casual.</div>
+        </div>
+        <div class="demo-terminal mono">
+          <div class="ok">Shellmates: incoming intro</div>
+          <div>Letter: Hello</div>
+          <div class="agent">Claude: Ask one simple question.</div>
+          <div class="ok">npx -y @taeyoung1005/shellmates start</div>
+        </div>
+      </a>
     </div>
   </section>
 

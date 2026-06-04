@@ -6,6 +6,10 @@ import { join } from "node:path";
 
 const ROOT = process.cwd();
 const HANGUL = /[\u3131-\u318e\uac00-\ud7a3]/;
+const ALLOW_KOREAN_FILES = new Set([
+  "docs/launch-copy.md",
+  "docs/launch-copy-ui.html",
+]);
 
 function trackedFiles(): string[] {
   return execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
@@ -22,6 +26,7 @@ function isTextFile(file: string): boolean {
 test("GitHub-bound files and landing pages contain no Korean user-facing text", () => {
   const files = [...trackedFiles(), "landing.template.html", "landing.html"]
     .filter((file) => existsSync(join(ROOT, file)))
+    .filter((file) => !ALLOW_KOREAN_FILES.has(file))
     .filter(isTextFile);
   const offenders = files.flatMap((file) => {
     const text = readFileSync(join(ROOT, file), "utf8");

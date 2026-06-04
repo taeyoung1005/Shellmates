@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { Engine } from "../core/engine.js";
 
 const DEFAULT_PUBLIC_RELAY = "https://shellmates.parktaeyoung.com/relay";
 const CHANNEL_SERVER_NAME = "shellmates-channel";
@@ -96,6 +97,46 @@ function channelArgs(selection: SetupSelection): string[] {
     args.push("--server", selection.serverUrl!);
   }
   return args;
+}
+
+function engineEnvFromSavedConfig(selection: SetupSelection, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...env, TL_HOME: selection.shellmatesHome };
+  if (selection.mode === "local") {
+    out.TL_NET = selection.localFolder!;
+    delete out.TL_SERVER;
+  } else {
+    out.TL_SERVER = selection.serverUrl!;
+    delete out.TL_NET;
+  }
+  if (selection.token) out.TL_RELAY_ACCESS_TOKEN = selection.token;
+
+  const configPath = join(selection.shellmatesDir, ".mcp.json");
+  if (!existsSync(configPath)) return out;
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+      mcpServers?: Record<string, { args?: string[]; env?: Record<string, string> }>;
+    };
+    const server = config.mcpServers?.[CHANNEL_SERVER_NAME];
+    if (!server) return out;
+    if (server.env) Object.assign(out, server.env);
+    const args = Array.isArray(server.args) ? server.args : [];
+    for (let i = 0; i < args.length; i++) {
+      const key = args[i];
+      const value = args[i + 1];
+      if (key === "--server" && value) {
+        out.TL_SERVER = value;
+        delete out.TL_NET;
+      }
+      if (key === "--local-folder" && value) {
+        out.TL_NET = value;
+        delete out.TL_SERVER;
+      }
+    }
+  } catch {
+    // Keep the explicit/default selection if the saved config is unavailable or malformed.
+  }
+  return out;
 }
 
 function onboardingGuide(selection: SetupSelection): string {
@@ -208,6 +249,41 @@ export function startShellmates(argv: string[], env: NodeJS.ProcessEnv = process
   return `${setupText}\n\n${openText}`;
 }
 
+export function resetShellmates(argv: string[], env: NodeJS.ProcessEnv = process.env): string {
+  const { flags } = parsePackageArgs(argv);
+  const selection = selectionFromArgs(argv, env);
+  const engine = Engine.open(engineEnvFromSavedConfig(selection, env));
+  const status = engine.status();
+  let publicProfile = "none found";
+
+  if (status.published) {
+    const unpublished = engine.unpublish();
+    if (!unpublished.ok && flags["force-local-delete"] !== true) {
+      return [
+        "Shellmates reset stopped",
+        `  public profile : ${unpublished.message}`,
+        `  local session  : kept at ${selection.shellmatesDir}`,
+        "",
+        "The local keys were kept so you can retry deleting the public card.",
+        "Use --force-local-delete only if you accept leaving the old public card until it expires.",
+      ].join("\n");
+    }
+    publicProfile = unpublished.ok ? "removed from directory" : "not removed; forced local delete";
+  } else if (status.has_profile) {
+    publicProfile = "local draft only";
+  }
+
+  rmSync(selection.shellmatesDir, { recursive: true, force: true });
+  return [
+    "Shellmates reset complete",
+    `  public profile : ${publicProfile}`,
+    `  local session  : removed ${selection.shellmatesDir}`,
+    "",
+    "Start clean:",
+    `  ${NPX_CMD} start`,
+  ].join("\n");
+}
+
 export const PACKAGE_HELP = `Shellmates package commands
   setup [--server url | --private url | --local-folder path] [--token token]
       Configure the isolated Claude Code channel session. Defaults to the public Shellmates relay.
@@ -215,6 +291,8 @@ export const PACKAGE_HELP = `Shellmates package commands
       Open the configured Shellmates channel session.
   start [setup flags] [--print]
       Configure, then open the Shellmates channel session.
+  reset [setup flags] [--force-local-delete]
+      Unpublish the current public profile, then remove the isolated local session.
   sm-channel [--server url | --local-folder path] [--token token] [--home path]
       Run the Shellmates MCP channel server. Usually launched by Claude Code.
   sm-mcp [--server url | --local-folder path] [--token token]

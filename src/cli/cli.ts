@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
 import type { CoachingPayload, IntroRecord, MatchResult, ProfileAnswers, MatchingMode } from "../core/types.js";
-import { openShellmates, PACKAGE_HELP, setupShellmates, startShellmates } from "../package/commands.js";
+import { openShellmates, PACKAGE_HELP, resetShellmates, setupShellmates, startShellmates } from "../package/commands.js";
 
 interface Parsed {
   command: string;
@@ -347,6 +347,10 @@ async function main(): Promise<void> {
   }
   if (packageCommand === "start") {
     console.log(startShellmates(argv.slice(1)));
+    return;
+  }
+  if (packageCommand === "reset") {
+    console.log(resetShellmates(argv.slice(1)));
     return;
   }
   if (packageCommand === "sm-channel" || packageCommand === "channel") {

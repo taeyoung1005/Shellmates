@@ -255,7 +255,7 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       border-top: 1px solid var(--line);
     }
 
@@ -538,11 +538,15 @@
       <div class="stats">
         <div class="stat">
           <b id="stat-users">0</b>
-          <span>Unique Users Attempted</span>
+          <span>Profiles Ever Seen</span>
         </div>
         <div class="stat">
           <b id="stat-chat-users">0</b>
           <span>Online Now</span>
+        </div>
+        <div class="stat">
+          <b id="stat-recent-users">0</b>
+          <span>Recently Seen</span>
         </div>
         <div class="stat">
           <b id="stat-conversations">0</b>
@@ -607,6 +611,11 @@
         <div class="kicker mono">Quick Start</div>
         <h2>Up and running in one command.</h2>
         <p>No repository cloning or local server setups. Just run the command to launch your secure, isolated session.</p>
+        <p>
+          The install commands below are static. Live changes appear in the relay panel above:
+          closing the session changes Online Now after the heartbeat expires, while Profiles Ever Seen is cumulative.
+          To disappear from the public directory, run reset before deleting local files.
+        </p>
       </div>
       <div class="command-stack">
         <div class="command-card recommended">
@@ -625,6 +634,15 @@
           </div>
           <pre id="cmd-open" class="terminal">npx -y @taeyoung1005/shellmates open</pre>
           <p class="command-note">Reopen your active Shellmates session anytime without resetting your config.</p>
+        </div>
+
+        <div class="command-card">
+          <div class="command-head">
+            <div class="command-label"><span>Reset and leave the public directory</span></div>
+            <button class="copy-button" type="button" data-copy-target="cmd-reset">Copy</button>
+          </div>
+          <pre id="cmd-reset" class="terminal">npx -y @taeyoung1005/shellmates reset</pre>
+          <p class="command-note">Unpublishes your current profile before removing the isolated local session.</p>
         </div>
       </div>
 
@@ -699,6 +717,7 @@ npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
     function renderStats(data) {
       setText("stat-users", fmt.format(data.users_attempted_total || 0));
       setText("stat-chat-users", fmt.format(data.online_users || 0));
+      setText("stat-recent-users", fmt.format(data.recently_seen_users || 0));
       setText("stat-conversations", fmt.format(data.active_conversations || 0));
       setText("stat-cards", fmt.format(data.storage?.cards || 0));
       setText("updated-at", new Date(data.updated_at || Date.now()).toLocaleTimeString("en-US", { hour12: false }) + " updated");

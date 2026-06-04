@@ -46,3 +46,19 @@ test("landing hero does not show protocol proof cards", () => {
     assert.doesNotMatch(html, />MCP Firewall</, file);
   });
 });
+
+test("landing copy distinguishes live presence from cumulative public stats", () => {
+  const files = [
+    "worker/public/index.html",
+    "landing.template.html"
+  ];
+
+  files.forEach((file) => {
+    const html = readFileSync(join(ROOT, file), "utf8");
+    assert.match(html, /Profiles Ever Seen/, file);
+    assert.match(html, /Recently Seen/, file);
+    assert.match(html, /Public Directory Cards/, file);
+    assert.match(html, /Closing the session changes Online Now after the heartbeat expires/i, file);
+    assert.match(html, /To disappear from the public directory, run reset before deleting local files/i, file);
+  });
+});

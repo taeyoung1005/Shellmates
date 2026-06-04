@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -216,4 +216,51 @@ test("package CLI start --print configures then shows the Claude channel command
   assert.ok(existsSync(join(home, "shellmates", ".mcp.json")), "start should configure the channel session");
   assert.match(out, /relay mode\s+: public network \(https:\/\/relay\.example\.com\)/);
   assert.match(out, /claude --mcp-config .*\.mcp\.json"? --dangerously-load-development-channels server:shellmates-channel/);
+});
+
+test("package CLI reset unpublishes before removing the isolated local session", () => {
+  const home = mkdtempSync(join(tmpdir(), "sm-reset-home-"));
+  const localNet = join(mkdtempSync(join(tmpdir(), "sm-reset-net-")), "net");
+  const run = (args: string[]) =>
+    execFileSync(process.execPath, ["--import", "tsx", shellmatesCliTs, ...args], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, TL_SOUND: "0" },
+    });
+
+  run(["setup", "--local-folder", localNet]);
+  const shellmatesHome = join(home, "shellmates", "home");
+  const cliEnv = { ...process.env, TL_HOME: shellmatesHome, TL_NET: localNet, TL_SOUND: "0" };
+  execFileSync(process.execPath, ["--import", "tsx", shellmatesCliTs, "init"], { cwd: repoRoot, env: cliEnv });
+  execFileSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      shellmatesCliTs,
+      "profile",
+      "--name",
+      "Reset Test",
+      "--country",
+      "Korea",
+      "--langs",
+      "Korean,English",
+      "--stacks",
+      "TypeScript",
+      "--interests",
+      "AI,Startups",
+      "--modes",
+      "builder",
+    ],
+    { cwd: repoRoot, env: cliEnv },
+  );
+  execFileSync(process.execPath, ["--import", "tsx", shellmatesCliTs, "publish"], { cwd: repoRoot, env: cliEnv });
+  assert.equal(readdirSync(join(localNet, "directory")).filter((f) => f.endsWith(".json")).length, 1);
+
+  const out = run(["reset"]);
+
+  assert.match(out, /Shellmates reset complete/);
+  assert.match(out, /public profile\s+: removed from directory/);
+  assert.equal(readdirSync(join(localNet, "directory")).filter((f) => f.endsWith(".json")).length, 0);
+  assert.equal(existsSync(join(home, "shellmates")), false);
 });

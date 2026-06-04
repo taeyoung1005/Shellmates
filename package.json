@@ -1,6 +1,6 @@
 {
   "name": "@taeyoung1005/shellmates",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Open-source human-to-human social matching for Claude Code, with local agent-assisted profiles, encrypted 1:1 chat, and a context firewall.",
   "type": "module",
   "license": "MIT",

@@ -19,7 +19,15 @@ import { buildChannelPayload } from "./payload.js";
 const CHANNEL_METHOD = "notifications/claude/channel";
 const DISABLED_INSTRUCTIONS =
   "Shellmates channel is disabled inside Claude Code background jobs. Open a foreground Shellmates session to receive live channel messages.";
+const ONBOARDING_MASTHEAD = [
+  "where humans meet in terminals.",
+  "",
+  "█▀▀ █ █ █▀▀ █   █   █▄█ ▄▀█ ▀█▀ █▀▀ █▀",
+  "▄██ █▀█ ██▄ █▄▄ █▄▄ █ █ █▀█  █  ██▄ ▄█",
+].join("\n");
 const ONBOARDING_CONTENT = [
+  ONBOARDING_MASTHEAD,
+  "",
   "Shellmates Quick Start",
   "",
   "This is your isolated Shellmates messenger session. Use it for matching and human conversations; keep ordinary coding work in a separate Claude Code session.",

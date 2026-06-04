@@ -153,6 +153,9 @@ test("channel server can push visible onboarding instructions at session start",
     assert.equal(c.method, CHANNEL_METHOD);
     assert.equal(c.params.meta.kind, "onboarding");
     assert.equal(c.params.meta.from, "shellmates");
+    assert.ok(c.params.content.includes("where humans meet in terminals."));
+    assert.ok(c.params.content.includes("█▀▀ █ █ █▀▀ █   █   █▄█ ▄▀█ ▀█▀ █▀▀ █▀"));
+    assert.ok(c.params.content.includes("▄██ █▀█ ██▄ █▄▄ █▄▄ █ █ █▀█  █  ██▄ ▄█"));
     assert.ok(c.params.content.includes("Shellmates Quick Start"));
     assert.ok(c.params.content.includes("shellmates_status"));
     assert.ok(c.params.content.includes("shellmates_set_profile"));

@@ -155,34 +155,6 @@
       gap: 12px;
     }
 
-    .proof-row {
-      margin-top: 34px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      max-width: 620px;
-    }
-
-    .proof {
-      padding: 15px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.035);
-    }
-
-    .proof strong {
-      display: block;
-      font-size: 18px;
-    }
-
-    .proof span {
-      display: block;
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
     .panel {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -506,7 +478,7 @@
         grid-template-columns: 1fr;
         min-height: auto;
       }
-      .proof-row, .stats, .relay-checks, .grid-3 {
+      .stats, .relay-checks, .grid-3 {
         grid-template-columns: 1fr;
       }
       .stat, .relay-check {
@@ -538,29 +510,15 @@
 
   <main id="top" class="shell hero">
     <div>
-      <div class="kicker mono">Human chat with agent assistance</div>
-      <h1>Meet and talk with people, helped by your coding agent.</h1>
+      <div class="kicker mono">Agent-Assisted 1:1 Chat</div>
+      <h1>Human connection. Guided by your agent.</h1>
       <p class="lead">
-        Shellmates lets people use their coding agents to create profiles, find compatible matches, and keep 1:1 chats encrypted.
-        The agent helps with context, safety, and reply direction, but humans choose what gets sent.
+        Create profiles, find compatible peers, and chat securely—all assisted by your AI coding agent.
+        You choose what gets sent; your agent handles context and security.
       </p>
       <div class="actions">
         <a class="button primary" href="#relay">View Live Usage</a>
         <a class="button" href="https://github.com/taeyoung1005/Shellmates" target="_blank" rel="noreferrer">View Source</a>
-      </div>
-      <div class="proof-row">
-        <div class="proof">
-          <strong>Ed25519</strong>
-          <span>Signed public profiles and relay requests verify identity.</span>
-        </div>
-        <div class="proof">
-          <strong>X25519</strong>
-          <span>The relay stores ciphertext only and cannot read message bodies.</span>
-        </div>
-        <div class="proof">
-          <strong>MCP Firewall</strong>
-          <span>Coding context stays separate from human chat content.</span>
-        </div>
       </div>
     </div>
 
@@ -620,24 +578,24 @@
     <div class="shell">
       <div class="section-title">
         <div class="kicker mono">Security Boundary</div>
-        <h2>The relay only needs minimal metadata.</h2>
+        <h2>Zero-Knowledge Transit.</h2>
         <p>
-          The server records only aggregate metadata such as country code, unique agent_id, and active conversation_id.
-          Raw IP addresses and message bodies are never stored in public stats.
+          Our server records only minimal metadata: country code, anonymized agent ID, and active conversation IDs.
+          No IP addresses, no logs, and absolutely no readable messages.
         </p>
       </div>
       <div class="grid-3">
         <div class="feature">
-          <h3>Public Stats</h3>
-          <p><code>/relay/public-stats</code> returns only aggregates for the landing page. It is open without an admission token and never includes message bodies or private-key material.</p>
+          <h3>Anonymized Stats</h3>
+          <p>Public endpoints return only aggregates. Private keys and message contents never leave your local environment.</p>
         </div>
         <div class="feature">
-          <h3>Country Location</h3>
-          <p>The relay stores only country codes derived from proxy headers such as Cloudflare, Vercel, and Fly, or from <code>TL_IP_COUNTRY_MAP</code>.</p>
+          <h3>Coarse Location</h3>
+          <p>The relay resolves only country codes from secure proxy headers. Your raw IP address is never stored.</p>
         </div>
         <div class="feature">
-          <h3>Active Chats</h3>
-          <p>Accepted, message, and end envelopes update active 1:1 chat and participant counts by conversation_id.</p>
+          <h3>Encrypted Routing</h3>
+          <p>Messages travel as encrypted envelopes. The relay facilitates transmission without ever decrypting contents.</p>
         </div>
       </div>
     </div>
@@ -647,8 +605,8 @@
     <div class="shell">
       <div class="section-title">
         <div class="kicker mono">Quick Start</div>
-        <h2>Start once. Reopen anytime.</h2>
-        <p>No clone, no local relay server. Start creates the isolated Shellmates session and connects it to the public relay above.</p>
+        <h2>Up and running in one command.</h2>
+        <p>No repository cloning or local server setups. Just run the command to launch your secure, isolated session.</p>
       </div>
       <div class="command-stack">
         <div class="command-card recommended">
@@ -657,7 +615,7 @@
             <button class="copy-button" type="button" data-copy-target="cmd-start">Copy</button>
           </div>
           <pre id="cmd-start" class="terminal">npx -y @taeyoung1005/shellmates start</pre>
-          <p class="command-note">Run this the first time. It writes the isolated session config under <code>~/shellmates</code>, then opens Shellmates.</p>
+          <p class="command-note">Run once to initialize your isolated session under <code>~/shellmates</code> and start chatting.</p>
         </div>
 
         <div class="command-card">
@@ -666,7 +624,7 @@
             <button class="copy-button" type="button" data-copy-target="cmd-open">Copy</button>
           </div>
           <pre id="cmd-open" class="terminal">npx -y @taeyoung1005/shellmates open</pre>
-          <p class="command-note">Use this when the Terminal window was closed. It reopens the existing Shellmates session without changing your setup.</p>
+          <p class="command-note">Reopen your active Shellmates session anytime without resetting your config.</p>
         </div>
       </div>
 
@@ -685,7 +643,8 @@ npx -y @taeyoung1005/shellmates start --server https://your-host/relay</pre>
   </section>
 
   <footer class="shell">
-    Shellmates - MIT License. Message bodies stay local; the relay keeps only ciphertext and aggregates.
+    Shellmates is MIT licensed. Relay stores ciphertext and aggregate stats only.
+    <br><span style="color:var(--muted);font-size:11px">Map: simple-world-map by Al MacDonald / Fritz Lekschas, <a href="https://creativecommons.org/licenses/by-sa/3.0/" style="color:inherit">CC BY-SA 3.0</a>.</span>
   </footer>
 
   <script>

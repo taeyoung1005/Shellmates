@@ -486,11 +486,11 @@ npx -y @taeyoung1005/shellmates start
 
 | Platform | Primary Asset | Caption Direction |
 | --- | --- | --- |
-| X teaser / reply | `video/renders/shellmates-teaser-15s.mp4` | Weird experiment, one relay, real-time Claude Code intros |
+| X teaser / reply | `video/renders/shellmates-teaser-15s.mp4` (9:16 vertical) | Weird experiment, one relay, real-time Claude Code intros |
 | X launch | `video/renders/shellmates-launch-30s.mp4` | Similar interests, translation, Claude-assisted replies |
 | Reddit | `video/renders/shellmates-animated-demo.mp4` | Honest open-source experiment, ask for code/privacy/protocol review |
 | Product Hunt | `video/renders/shellmates-launch-30s.mp4` | Product value: friends, dates, teammates, hackathons, global building |
-| Reels / Shorts | `video/renders/shellmates-teaser-15s.mp4` | Visual hook first, minimal explanation |
+| Reels / Shorts | `video/renders/shellmates-teaser-15s.mp4` (9:16 vertical) | Visual hook first, minimal explanation |
 
 ## Launch Asset Captions
 

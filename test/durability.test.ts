@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveCtx } from "../src/core/config.js";
 import { generateIdentity } from "../src/core/crypto.js";
@@ -9,7 +10,7 @@ import { Engine } from "../src/core/engine.js";
 import { HttpTransport } from "../src/core/transport-http.js";
 import { LocalFsTransport } from "../src/core/transport-local.js";
 import type { Transport, PolledEnvelope, DirectoryQuery } from "../src/core/transport.js";
-import type { Envelope, PresenceInfo, ProfileCard, PublicProfileCard } from "../src/core/types.js";
+import type { Envelope, PresenceInfo, ProfileCard, PublicProfileCard, State } from "../src/core/types.js";
 import { ALICE, BOB, tempRoot } from "./helpers.js";
 
 // Internal implementation note.
@@ -84,6 +85,57 @@ test("HIGH regression: inbound message ingested in send() survives a throwing se
   // Internal implementation note.
   const again = alice.poll();
   assert.equal(again.ingested, 0, "already ingested message should not be received again because seen_env is durable");
+});
+
+test("rob-01: relay delete (ack) happens only after local state is durably persisted", () => {
+  const root = tempRoot();
+  const net = join(root, "net");
+  const aliceCtx = resolveCtx({ TL_HOME: join(root, "alice"), TL_NET: net } as NodeJS.ProcessEnv);
+  const bobCtx = resolveCtx({ TL_HOME: join(root, "bob"), TL_NET: net } as NodeJS.ProcessEnv);
+
+  // Probe that, on each relay delete (ack), captures what is already persisted on disk.
+  const inner = new LocalFsTransport(aliceCtx);
+  const probeState: { textsAtAck: string[] | null } = { textsAtAck: null };
+  const probe: Transport = {
+    publishCard: (c) => inner.publishCard(c),
+    revokeCard: (id) => inner.revokeCard(id),
+    scanCards: (now, q) => inner.scanCards(now, q),
+    lookupCard: (id, now) => inner.lookupCard(id, now),
+    sendEnvelope: (e) => inner.sendEnvelope(e),
+    pollEnvelopes: (me) => inner.pollEnvelopes(me),
+    heartbeat: (id) => inner.heartbeat(id),
+    deleteEnvelope: (ref) => {
+      if (probeState.textsAtAck === null) {
+        const persisted = JSON.parse(readFileSync(aliceCtx.statePath, "utf8")) as State;
+        probeState.textsAtAck = (persisted.active_chat?.messages ?? []).map((m) => m.text);
+      }
+      inner.deleteEnvelope(ref);
+    },
+  };
+  const alice = new Engine(aliceCtx, probe);
+  const bob = new Engine(bobCtx);
+
+  alice.init();
+  const bId = bob.init().agent_id!;
+  alice.makeProfile(ALICE);
+  alice.publish();
+  bob.makeProfile(BOB);
+  bob.publish();
+  assert.ok(alice.intro(bId, "hi bob").ok);
+  const intro = bob.inbox().intros[0]!;
+  assert.ok(bob.accept(intro.intro_id).ok);
+  assert.ok(alice.open().chat, "alice chat should open");
+
+  const MARK = "ACK_AFTER_SAVE_MARK";
+  assert.ok(bob.send(MARK).ok);
+  probeState.textsAtAck = null; // ignore acks from setup; capture the next one (for MARK)
+  alice.poll();
+
+  // `as` defeats the control-flow narrowing from the `= null` assignment above; alice.poll()
+  // repopulates it via the probe's deleteEnvelope hook.
+  const seen = probeState.textsAtAck as string[] | null;
+  assert.ok(seen, "an ack delete should have occurred while ingesting MARK");
+  assert.ok(seen.includes(MARK), "state must already be persisted with MARK at ack time (persist-before-ack)");
 });
 
 test("HIGH regression: scan() commits ingest before a throwing scanCards (no inbound intro loss)", () => {

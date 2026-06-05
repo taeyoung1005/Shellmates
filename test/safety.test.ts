@@ -37,3 +37,20 @@ test("benign message is not flagged", () => {
   const r = sanitizeIncoming("Hi! What kind of project are you building these days?");
   assert.equal(r.flagged, false);
 });
+
+test("sanitizeIncoming strips zero-width and bidi-override chars from the returned body", () => {
+  const zwsp = String.fromCharCode(0x200b);
+  const rlo = String.fromCharCode(0x202e); // right-to-left override
+  const bom = String.fromCharCode(0xfeff);
+  const r = sanitizeIncoming(`hel${zwsp}lo${rlo} wor${bom}ld`);
+  assert.equal(r.text.includes(zwsp), false, "zero-width space must be stripped");
+  assert.equal(r.text.includes(rlo), false, "bidi override must be stripped");
+  assert.equal(r.text.includes(bom), false, "BOM must be stripped");
+  assert.ok(r.text.includes("hel") && r.text.includes("world"), "visible text survives");
+});
+
+test("sanitizeIncoming preserves newlines and tabs", () => {
+  const r = sanitizeIncoming("line1\nline2\tend");
+  assert.ok(r.text.includes("\n"), "newlines preserved");
+  assert.ok(r.text.includes("\t"), "tabs preserved");
+});

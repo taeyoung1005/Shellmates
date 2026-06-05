@@ -27,6 +27,11 @@ test("GitHub-bound files and landing pages contain no Korean user-facing text", 
   const files = [...trackedFiles(), "landing.template.html", "landing.html"]
     .filter((file) => existsSync(join(ROOT, file)))
     .filter((file) => !ALLOW_KOREAN_FILES.has(file))
+    // The video/ sub-project is a standalone Remotion bundle (not shipped in the npm
+    // package) whose demo assets are intentionally bilingual: Korean subtitle tracks and
+    // on-screen hello/translation demos. Exclude the whole tree so the firewall keeps
+    // covering real product/docs files without per-file allowlisting.
+    .filter((file) => !file.startsWith("video/"))
     .filter(isTextFile);
   const offenders = files.flatMap((file) => {
     const text = readFileSync(join(ROOT, file), "utf8");

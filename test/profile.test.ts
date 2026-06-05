@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateIdentity } from "../src/core/crypto.js";
-import { buildProfile, signProfile, verifyCard } from "../src/core/profile.js";
+import { buildProfile, renewProfile, signProfile, verifyCard } from "../src/core/profile.js";
 import { addDaysIso } from "../src/core/util.js";
 import { ALICE } from "./helpers.js";
 
@@ -33,4 +33,14 @@ test("owner binding mismatch fails", () => {
   const other = generateIdentity();
   const card = signProfile(id, buildProfile(id, ALICE));
   assert.equal(verifyCard({ ...card, owner: other.agent_id }).ok, false);
+});
+
+test("renewProfile re-signs with a fresh expiry and stays valid", () => {
+  const id = generateIdentity();
+  const card = signProfile(id, { ...buildProfile(id, ALICE), expires_at: addDaysIso(1) });
+  const renewed = renewProfile(id, card, 30);
+  assert.ok(verifyCard(renewed).ok, verifyCard(renewed).reason);
+  assert.ok(Date.parse(renewed.expires_at) > Date.parse(card.expires_at), "expiry should advance");
+  assert.ok(Date.parse(renewed.created_at) >= Date.parse(card.created_at), "created_at should refresh");
+  assert.equal(renewed.owner, id.agent_id);
 });

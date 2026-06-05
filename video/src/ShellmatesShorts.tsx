@@ -6,13 +6,13 @@ import { Soundtrack, WorldRelayScene, progressAt, sans, scanLine, shell } from "
 
 const terminalTop = 304;
 const verticalMap = {
-  width: 972,
-  height: 610,
-  left: 54,
-  top: 410
+  width: 984,
+  height: 676,
+  left: 48,
+  top: 388
 };
 const verticalLand = feature(landAtlas as any, (landAtlas as any).objects.land) as any;
-const verticalProjection = geoEqualEarth().fitSize([verticalMap.width - 82, verticalMap.height - 156], verticalLand);
+const verticalProjection = geoEqualEarth().fitSize([verticalMap.width - 92, verticalMap.height - 218], verticalLand);
 const verticalWorldPath = geoPath(verticalProjection)(verticalLand) ?? "";
 
 type VerticalPoint = "korea" | "relay" | "us";
@@ -20,8 +20,8 @@ type VerticalPoint = "korea" | "relay" | "us";
 const projectVertical = (coordinates: [number, number]) => {
   const point = verticalProjection(coordinates);
   return {
-    x: (point?.[0] ?? 0) + 40,
-    y: (point?.[1] ?? 0) + 92
+    x: (point?.[0] ?? 0) + 46,
+    y: (point?.[1] ?? 0) + 156
   };
 };
 
@@ -136,28 +136,28 @@ const VerticalHook = () => {
   const opacity = progressAt(frame, fps, 0.15, 0.45);
 
   return (
-    <div style={{ position: "absolute", left: 54, top: 82, right: 54, opacity }}>
+    <div style={{ position: "absolute", left: 48, top: 66, right: 48, opacity }}>
       <div
         style={{
           display: "inline-block",
-          padding: "0 10px 4px",
-          marginLeft: -10,
+          padding: "0 12px 5px",
+          marginLeft: -12,
           background: "rgba(93,112,255,0.2)",
           color: "#dfe6ff",
           fontFamily: sans,
-          fontSize: 70,
+          fontSize: 65,
           lineHeight: 0.94,
           fontWeight: 860
         }}
       >
         Claude Code
       </div>
-      <div style={{ marginTop: 8, fontFamily: sans, fontSize: 62, lineHeight: 0.96, color: "#f8fafc", fontWeight: 860 }}>
+      <div style={{ marginTop: 8, fontFamily: sans, fontSize: 58, lineHeight: 0.96, color: "#f8fafc", fontWeight: 860 }}>
         can introduce
         <br />
         two strangers.
       </div>
-      <div style={{ marginTop: 22, fontFamily: sans, fontSize: 27, color: "#9aa5b1" }}>
+      <div style={{ marginTop: 20, fontFamily: sans, fontSize: 26, color: "#9aa5b1" }}>
         Same interests. Different countries. One relay.
       </div>
     </div>
@@ -174,9 +174,9 @@ const VerticalInterestChips = () => {
     <div
       style={{
         position: "absolute",
-        left: 54,
-        right: 54,
-        top: 354,
+        left: 48,
+        right: 48,
+        top: 330,
         display: "flex",
         gap: 12,
         opacity
@@ -186,13 +186,13 @@ const VerticalInterestChips = () => {
         <div
           key={chip}
           style={{
-            padding: "10px 16px",
+            padding: "10px 18px",
             borderRadius: 999,
             color: index === 0 ? "#05100e" : "#cbd5df",
             background: index === 0 ? "#2de2c6" : "rgba(255,255,255,0.075)",
             border: "1px solid rgba(255,255,255,0.12)",
             fontFamily: sans,
-            fontSize: 21,
+            fontSize: 22,
             fontWeight: 760
           }}
         >
@@ -250,14 +250,14 @@ const VerticalMapScene = () => {
           </linearGradient>
         </defs>
         {Array.from({ length: 8 }).map((_, index) => (
-          <line key={`v-lat-${index}`} x1="0" x2={verticalMap.width} y1={70 + index * 64} y2={70 + index * 64} stroke="rgba(255,255,255,0.045)" />
+          <line key={`v-lat-${index}`} x1="0" x2={verticalMap.width} y1={86 + index * 66} y2={86 + index * 66} stroke="rgba(255,255,255,0.045)" />
         ))}
         {Array.from({ length: 10 }).map((_, index) => (
           <line key={`v-lon-${index}`} x1={70 + index * 96} x2={70 + index * 96} y1="0" y2={verticalMap.height} stroke="rgba(255,255,255,0.04)" />
         ))}
         <path
           d={verticalWorldPath}
-          transform="translate(40, 92)"
+          transform="translate(46, 156)"
           fill="rgba(223,232,241,0.14)"
           stroke="rgba(223,232,241,0.24)"
           strokeWidth="0.9"
@@ -274,13 +274,13 @@ const VerticalMapScene = () => {
         <circle cx={signalX} cy={signalY} r={12 + pulse * 4} fill="#f8fafc" opacity={signal} />
         <circle cx={signalX} cy={signalY} r={26 + pulse * 10} fill="none" stroke="#2de2c6" strokeWidth="2" opacity={signal * 0.5} />
       </svg>
-      <div style={{ position: "absolute", left: 34, top: 28, fontFamily: shell, color: "#2de2c6", fontSize: 21, fontWeight: 840 }}>
+      <div style={{ position: "absolute", left: 36, top: 30, fontFamily: shell, color: "#2de2c6", fontSize: 21, fontWeight: 840 }}>
         LIVE PUBLIC RELAY
       </div>
-      <div style={{ position: "absolute", left: 34, top: 62, fontFamily: sans, color: "#edf4fb", fontSize: 36, fontWeight: 820 }}>
+      <div style={{ position: "absolute", left: 36, top: 66, fontFamily: sans, color: "#edf4fb", fontSize: 38, fontWeight: 820 }}>
         Mina sends 안녕하세요
       </div>
-      <div style={{ position: "absolute", left: 34, top: 110, fontFamily: sans, color: "#98a3af", fontSize: 22 }}>
+      <div style={{ position: "absolute", left: 36, top: 116, fontFamily: sans, color: "#98a3af", fontSize: 23 }}>
         Ken receives it as Hello.
       </div>
       {(Object.keys(verticalPoints) as VerticalPoint[]).map((key) => {
@@ -316,9 +316,9 @@ const VerticalMapScene = () => {
       <div
         style={{
           position: "absolute",
-          right: 30,
-          bottom: 28,
-          padding: "14px 17px",
+          right: 32,
+          bottom: 30,
+          padding: "15px 18px",
           opacity: translation,
           transform: `translateY(${interpolate(translation, [0, 1], [18, 0])}px)`,
           borderRadius: 18,
@@ -329,9 +329,56 @@ const VerticalMapScene = () => {
           textAlign: "center"
         }}
       >
-        <div style={{ color: "#2de2c6", fontSize: 15, fontWeight: 820 }}>translated for Ken</div>
-        <div style={{ marginTop: 6, color: "#f8fafc", fontSize: 25, fontWeight: 840 }}>안녕하세요 -&gt; Hello</div>
+        <div style={{ color: "#2de2c6", fontSize: 16, fontWeight: 820 }}>translated for Ken</div>
+        <div style={{ marginTop: 6, color: "#f8fafc", fontSize: 27, fontWeight: 840 }}>안녕하세요 -&gt; Hello</div>
       </div>
+    </div>
+  );
+};
+
+const VerticalNarrativeBand = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = progressAt(frame, fps, 2.2, 0.4);
+  const leave = interpolate(frame, [fps * 6.0, fps * 6.45], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp"
+  });
+  const opacity = enter * leave;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 48,
+        right: 48,
+        top: 1092,
+        opacity,
+        transform: `translateY(${interpolate(enter, [0, 1], [26, 0])}px)`,
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 16
+      }}
+    >
+      {[
+        { label: "Mina writes", value: "안녕하세요", color: "#2de2c6" },
+        { label: "Ken reads", value: "Hello", color: "#ffba66" }
+      ].map((item) => (
+        <div
+          key={item.label}
+          style={{
+            minHeight: 122,
+            borderRadius: 22,
+            padding: "20px 22px",
+            background: "rgba(6,9,13,0.88)",
+            border: "1px solid rgba(255,255,255,0.13)",
+            boxShadow: "0 24px 90px rgba(0,0,0,0.38)"
+          }}
+        >
+          <div style={{ fontFamily: shell, fontSize: 17, color: item.color, fontWeight: 820 }}>{item.label}</div>
+          <div style={{ marginTop: 12, fontFamily: shell, fontSize: 32, color: "#f8fafc", fontWeight: 780 }}>{item.value}</div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -360,9 +407,9 @@ const VerticalTerminal = ({
     <div
       style={{
         position: "absolute",
-        left: 54,
+        left: 48,
         top,
-        width: 972,
+        width: 984,
         height: 258,
         opacity: enter,
         transform: `translateY(${interpolate(enter, [0, 1], [34, 0])}px)`,
@@ -424,8 +471,8 @@ const VerticalCommandCta = () => {
     <div
       style={{
         position: "absolute",
-        left: 54,
-        right: 54,
+        left: 48,
+        right: 48,
         bottom: 86,
         opacity: progress,
         transform: `translateY(${interpolate(progress, [0, 1], [42, 0])}px)`,
@@ -594,10 +641,11 @@ export const ShellmatesTeaser15 = () => {
       <VerticalHook />
       <VerticalInterestChips />
       <VerticalMapScene />
+      <VerticalNarrativeBand />
       <VerticalTerminal
-        top={1040}
+        top={1094}
         title="Mina · Korea"
-        delay={6.2}
+        delay={6.45}
         lines={[
           { text: "Shellmates: matched with Ken", tone: "success" },
           { text: "You: 안녕하세요", tone: "message" },
@@ -605,9 +653,9 @@ export const ShellmatesTeaser15 = () => {
         ]}
       />
       <VerticalTerminal
-        top={1332}
+        top={1378}
         title="Ken · United States"
-        delay={8.1}
+        delay={8.2}
         lines={[
           { text: "Shellmates: incoming intro", tone: "success" },
           { text: "Letter: Hello", tone: "letter" },

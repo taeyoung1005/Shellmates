@@ -7,12 +7,12 @@ import { Soundtrack, WorldRelayScene, progressAt, sans, scanLine, shell } from "
 const terminalTop = 304;
 const verticalMap = {
   width: 984,
-  height: 676,
+  height: 642,
   left: 48,
-  top: 388
+  top: 414
 };
 const verticalLand = feature(landAtlas as any, (landAtlas as any).objects.land) as any;
-const verticalProjection = geoEqualEarth().fitSize([verticalMap.width - 92, verticalMap.height - 218], verticalLand);
+const verticalProjection = geoEqualEarth().fitSize([verticalMap.width - 92, verticalMap.height - 210], verticalLand);
 const verticalWorldPath = geoPath(verticalProjection)(verticalLand) ?? "";
 
 type VerticalPoint = "korea" | "relay" | "us";
@@ -136,28 +136,28 @@ const VerticalHook = () => {
   const opacity = progressAt(frame, fps, 0.15, 0.45);
 
   return (
-    <div style={{ position: "absolute", left: 48, top: 66, right: 48, opacity }}>
+    <div style={{ position: "absolute", left: 64, top: 112, right: 64, opacity }}>
       <div
         style={{
           display: "inline-block",
-          padding: "0 12px 5px",
-          marginLeft: -12,
+          padding: "0 10px 5px",
+          marginLeft: -10,
           background: "rgba(93,112,255,0.2)",
           color: "#dfe6ff",
           fontFamily: sans,
-          fontSize: 65,
+          fontSize: 54,
           lineHeight: 0.94,
           fontWeight: 860
         }}
       >
         Claude Code
       </div>
-      <div style={{ marginTop: 8, fontFamily: sans, fontSize: 58, lineHeight: 0.96, color: "#f8fafc", fontWeight: 860 }}>
+      <div style={{ marginTop: 8, fontFamily: sans, fontSize: 49, lineHeight: 0.98, color: "#f8fafc", fontWeight: 860 }}>
         can introduce
         <br />
         two strangers.
       </div>
-      <div style={{ marginTop: 20, fontFamily: sans, fontSize: 26, color: "#9aa5b1" }}>
+      <div style={{ marginTop: 20, fontFamily: sans, fontSize: 24, color: "#9aa5b1" }}>
         Same interests. Different countries. One relay.
       </div>
     </div>
@@ -174,9 +174,9 @@ const VerticalInterestChips = () => {
     <div
       style={{
         position: "absolute",
-        left: 48,
-        right: 48,
-        top: 330,
+        left: 64,
+        right: 64,
+        top: 348,
         display: "flex",
         gap: 12,
         opacity
@@ -186,13 +186,13 @@ const VerticalInterestChips = () => {
         <div
           key={chip}
           style={{
-            padding: "10px 18px",
+            padding: "9px 16px",
             borderRadius: 999,
             color: index === 0 ? "#05100e" : "#cbd5df",
             background: index === 0 ? "#2de2c6" : "rgba(255,255,255,0.075)",
             border: "1px solid rgba(255,255,255,0.12)",
             fontFamily: sans,
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: 760
           }}
         >

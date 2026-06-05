@@ -1,14 +1,14 @@
-// Internal implementation note.
+// sync-fetch: a synchronous HTTP client.
 //
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Some call sites need an HTTP response without awaiting a Promise (e.g. code
+// paths that must stay fully synchronous). This bridges the async global
+// fetch() to a blocking API by running fetch() inside a short-lived child Node
+// process and blocking on it via execFileSync, exchanging a single JSON
+// request/response over the child's stdin/stdout.
 import { execFileSync } from "node:child_process";
 
-// Internal implementation note.
-// Internal implementation note.
+// Source for the child process: reads a JSON request from stdin, performs the
+// fetch with an AbortController timeout, and writes a JSON result to stdout.
 const HELPER = `
 let data = "";
 process.stdin.on("data", (c) => (data += c));
@@ -51,7 +51,7 @@ export interface SyncResponse {
   body: string;
 }
 
-/** Internal implementation note. */
+/** Performs an HTTP request synchronously, blocking until the response (or an error) is returned. */
 export function syncFetch(url: string, opts: SyncRequestOptions = {}): SyncResponse {
   const { method = "GET", headers = {}, body, timeoutMs = 15000 } = opts;
   const input = JSON.stringify({ url, method, headers, body, timeoutMs });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Internal implementation note.
-// Internal implementation note.
+// End-to-end demo: drives three Engines (Alice/Bob/Carol) through identity
+// creation, publishing, matching, encrypted 1:1 chat, and security scenarios.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
   const introR = alice.intro(bId, "Hi Bob! We both seem interested in AI products and side projects. What are you building these days?");
   log(introR.message);
   assert.ok(introR.ok);
-  // Internal implementation note.
+  // 1:1 guard: a second outstanding intro while one is pending must be blocked.
   const introBlocked = alice.intro(cId, "hi");
   assert.equal(introBlocked.ok, false);
   log(`  (1:1 guard) Alice tries a simultaneous intro to Carol and gets blocked: "${introBlocked.message}"`);
@@ -137,7 +137,8 @@ async function main(): Promise<void> {
   log("  → E2E encrypted 1:1 round trip succeeded.");
 
   hr("8) Security scenarios");
-  // Internal implementation note.
+  // 8a) Impersonation: attacker signs an envelope claiming Alice's agent_id as
+  // `from`, so the signature won't verify against Alice's sign pubkey.
   const attacker = generateIdentity();
   const aliceId = loadState(resolveCtx({ TL_HOME: join(root, "alice"), TL_NET: net } as NodeJS.ProcessEnv)).identity!;
   const bobId = loadState(resolveCtx({ TL_HOME: join(root, "bob"), TL_NET: net } as NodeJS.ProcessEnv)).identity!;
@@ -165,7 +166,8 @@ async function main(): Promise<void> {
   assert.equal(ingForged.rejected >= 1, true, "forged signature should be rejected");
   assert.equal(bobMsgAfter, bobMsgBefore, "forged message should not be applied to chat");
 
-  // Internal implementation note.
+  // 8b) Unmatched peer: a validly signed message from an agent with no intro or
+  // active chat with Bob should be rejected (no DM without a prior match).
   const noMatch: Envelope = signEnvelope(
     {
       type: "message",
@@ -185,7 +187,8 @@ async function main(): Promise<void> {
   log(`  8b) Direct message from an unmatched peer → rejected=${ingNoMatch.rejected} (no DM without intro)`);
   assert.ok(ingNoMatch.rejected >= 1, "message without a match or chat should be rejected");
 
-  // Internal implementation note.
+  // 8c) Replay: the same signed envelope sent twice — the second ingest is
+  // dropped because its envelope id/nonce was already seen.
   const replayEnv: Envelope = signEnvelope(
     {
       type: "message",
@@ -208,7 +211,8 @@ async function main(): Promise<void> {
   assert.equal(r1.ingested, 1);
   assert.equal(r2.ingested, 0, "replayed identical envelope should be ignored");
 
-  // Internal implementation note.
+  // 8d) Tampered card: Bob republishes Carol's card with altered interests but
+  // can't re-sign it as Carol, so Alice's scan rejects it and keeps the original.
   const tampered = { ...carol.getProfile()! , interests: ["Hacking", "Spam"] };
   publishCard(bobCtx, tampered as never);
   const aScan2 = alice.scan();
@@ -217,7 +221,8 @@ async function main(): Promise<void> {
   log(`  8d) After injecting a tampered Carol card, scan → Carol shown=${!!carolShown}, interests=${JSON.stringify(carolInterests)}`);
   assert.ok(!carolInterests.includes("Hacking"), "tampered card with invalid signature should not be adopted");
 
-  // Internal implementation note.
+  // 8e) Injection content: a genuinely signed message from Alice carrying a
+  // prompt-injection string is delivered but flagged by the context firewall.
   bob.send("test"); // keep chat alive
   const inj: Envelope = signEnvelope(
     {
@@ -244,10 +249,10 @@ async function main(): Promise<void> {
   const endR = alice.end();
   log("  " + endR.message);
   assert.ok(endR.ok);
-  // Internal implementation note.
+  // Bob's side should observe the chat closed once Alice ends it.
   const bAfterEnd = bob.open();
   log(`  Bob active chat: ${bAfterEnd.chat ? "yes" : "none, peer ended"}`);
-  // Internal implementation note.
+  // After ending, the former partner must not reappear as a match suggestion.
   const aScan3 = alice.scan();
   const bobReshown = aScan3.matches.find((m) => m.card.owner === bId);
   log(`  Bob shown again in Alice scan after end: ${!!bobReshown} (no_resuggest)`);

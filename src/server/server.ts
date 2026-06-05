@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Internal implementation note.
+// Shellmates relay/directory server.
 //
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Stores signed profile cards (directory) and signed envelopes (relay inbox)
+// without ever decrypting payloads. Owner-only operations (inbox read, deletes,
+// presence) require a signed Authorization header; cards are accepted on their
+// own embedded signature. Admission, rate limiting, allowlisting, and analytics
+// are enforced here; cryptographic verification lives in core/crypto and core/profile.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { isMainEntry } from "../core/entry.js";
 import { verifyAuth } from "../core/crypto.js";
 import { verifyCard } from "../core/profile.js";
@@ -45,6 +46,19 @@ function envInt(name: string, def: number): number {
   if (v === undefined) return def;
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
+}
+
+/** Constant-time string compare so the admission token cannot be guessed byte-by-byte via timing. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ba = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
+
+function isLoopbackAddress(addr: string | undefined): boolean {
+  const ip = (addr || "").replace(/^::ffff:/, "");
+  return ip === "127.0.0.1" || ip === "::1" || ip.startsWith("127.");
 }
 
 function normalizeBasePath(raw: string | undefined): string {
@@ -112,7 +126,7 @@ export function resolveServerConfig(env: NodeJS.ProcessEnv = process.env): Serve
   };
 }
 
-// Internal implementation note.
+// Fixed-window per-key counter: resets when the window elapses, otherwise counts hits.
 class RateLimiter {
   private hits = new Map<string, { count: number; windowStart: number }>();
   constructor(private windowMs: number) {}
@@ -183,9 +197,9 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     res.end(data);
   };
 
-  // Internal implementation note.
-  // Internal implementation note.
-  // Internal implementation note.
+  // Resolve the client IP. Only consult X-Forwarded-For when trustProxy is set,
+  // and then take the rightmost entry (the address the trusted proxy observed),
+  // since attacker-prepended XFF entries would otherwise spoof the source IP.
   const clientIp = (req: IncomingMessage): string => {
     if (cfg.trustProxy) {
       const xff = req.headers["x-forwarded-for"]?.toString();
@@ -201,10 +215,13 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
   const normalizeIp = (ip: string): string => ip.replace(/^::ffff:/, "");
 
   const countryFromRequest = (req: IncomingMessage, ip: string): string => {
-    // Internal implementation note.
-    for (const h of ["cf-ipcountry", "x-vercel-ip-country", "fly-client-ip-country", "x-country-code"]) {
-      const raw = req.headers[h]?.toString().trim().toUpperCase();
-      if (raw && /^[A-Z]{2}$/.test(raw)) return raw;
+    // CDN/proxy-supplied country headers are only trustworthy behind a trusted proxy; a
+    // directly-connected client could otherwise spoof its country and skew public stats.
+    if (cfg.trustProxy) {
+      for (const h of ["cf-ipcountry", "x-vercel-ip-country", "fly-client-ip-country", "x-country-code"]) {
+        const raw = req.headers[h]?.toString().trim().toUpperCase();
+        if (raw && /^[A-Z]{2}$/.test(raw)) return raw;
+      }
     }
     const normalized = normalizeIp(ip);
     const exact = cfg.ipCountryMap.get(normalized) ?? cfg.ipCountryMap.get(ip);
@@ -216,9 +233,8 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     return "ZZ";
   };
 
-  // Internal implementation note.
-  // Internal implementation note.
-  // Internal implementation note.
+  // Read the request body with a byte cap: returns null once size exceeds maxBytes,
+  // and destroys the socket past a 4x hard cap to bound memory against oversized uploads.
   const readBody = (req: IncomingMessage, maxBytes: number): Promise<string | null> =>
     new Promise((resolveBody) => {
       let size = 0;
@@ -248,7 +264,9 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
       req.on("error", () => finish(null));
     });
 
-  // Internal implementation note.
+  // Gate owner-only routes: verify the signed Authorization header binds to this
+  // method+path and resolves to agentId, then reject replayed nonces (each nonce
+  // is single-use, remembered for 5 minutes).
   const requireOwner = (req: IncomingMessage, res: ServerResponse, method: string, path: string, agentId: string): boolean => {
     const auth = verifyAuth(req.headers["authorization"]?.toString(), method, path);
     if (!auth.ok || auth.agentId !== agentId) {
@@ -280,7 +298,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
       return;
     }
 
-    // Internal implementation note.
+    // Public, CORS-enabled endpoints served before admission/rate checks.
     if (method === "GET" && path === "/health") {
       sendPublicStatus(res, 200, { ok: true, service: "shellmates-relay", version: SERVER_VERSION, open: cfg.open });
       return;
@@ -291,10 +309,11 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
       return;
     }
 
-    // Internal implementation note.
+    // Admission gate: when not open and a token is configured, require a matching
+    // X-TL-Access header (constant-time compare) before any non-public route.
     if (!cfg.open && cfg.accessToken) {
-      const token = req.headers["x-tl-access"]?.toString();
-      if (token !== cfg.accessToken) {
+      const token = req.headers["x-tl-access"]?.toString() ?? "";
+      if (!timingSafeEqualStr(token, cfg.accessToken)) {
         metrics.rejected_admission++;
         send(res, 401, { error: "admission_denied", hint: "X-TL-Access required" });
         return;
@@ -311,8 +330,12 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     }
 
     try {
-      // ── /metrics ──
+      // ── /metrics ── operational counters; loopback-only so open/token-less relays don't leak them.
       if (method === "GET" && path === "/metrics") {
+        if (!isLoopbackAddress(req.socket.remoteAddress)) {
+          send(res, 403, { error: "forbidden", hint: "metrics are loopback-only" });
+          return;
+        }
         send(res, 200, { ...metrics, stats: store.stats(), public_stats: store.publicStats(cfg.activeConversationTtlMs, new Date(now), cfg.presenceOnlineTtlMs, cfg.presenceRecentTtlMs) });
         return;
       }
@@ -375,7 +398,8 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             send(res, 400, { error: "owner_path_mismatch" });
             return;
           }
-          // Internal implementation note.
+          // Cards self-authenticate: verify the embedded signature instead of an
+          // Authorization header, so anyone holding a valid signed card can publish it.
           const v = verifyCard(card);
           if (!v.ok) {
             metrics.rejected_validation++;
@@ -426,7 +450,9 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
             send(res, 400, { error: "bad_json" });
             return;
           }
-          // Internal implementation note.
+          // Structural-only check: relay never decrypts or verifies the envelope; it
+          // only enforces that `to` matches the inbox path and the id/from/type fields
+          // are well-formed. Recipient verifies the signature on retrieval.
           if (env.to !== agentId || !isAgentId(env.from) || !isPrefixedId(env.id, "env") || !env.type) {
             metrics.rejected_validation++;
             send(res, 400, { error: "invalid_envelope" });
@@ -469,7 +495,7 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
 
       send(res, 404, { error: "not_found" });
     } catch (e) {
-      // Internal implementation note.
+      // Log the failing method+path to stderr but return a generic 500 (no internals leaked).
       process.stderr.write(`[tl-relay] 500 ${method} ${path}: ${(e as Error).message}\n`);
       send(res, 500, { error: "internal" });
     }
@@ -486,20 +512,24 @@ export function createApp(cfg: ServerConfig): { server: Server; store: ServerSto
     });
   });
 
-  // Internal implementation note.
+  // Background maintenance timers, all unref'd below so they never block process exit:
+  // expire used nonces and prune stale rate-limit buckets once a minute.
   const t1 = setInterval(() => {
     const now = Date.now();
     for (const [n, exp] of seenNonces) if (exp <= now) seenNonces.delete(n);
     rate.gc(now);
   }, 60 * 1000);
   const t2 = setInterval(() => store.gc(), 60 * 60 * 1000);
+  // Batched analytics flush keeps the full-document write off the per-request hot path.
+  const t3 = setInterval(() => store.flush(), 2000);
   t1.unref?.();
   t2.unref?.();
+  t3.unref?.();
 
-  return { server, store, metrics, timers: [t1, t2] };
+  return { server, store, metrics, timers: [t1, t2, t3] };
 }
 
-/** Internal implementation note. */
+/** Build the app and start listening; resolves with the bound port and a close() that stops timers, flushes, and drains connections. */
 export function startServer(cfg: ServerConfig = resolveServerConfig()): Promise<RunningServer> {
   const { server, store, timers } = createApp(cfg);
   return new Promise((res, rej) => {
@@ -514,7 +544,16 @@ export function startServer(cfg: ServerConfig = resolveServerConfig()): Promise<
         close: () =>
           new Promise<void>((done) => {
             for (const t of timers) clearInterval(t);
-            server.close(() => done());
+            store.flush(); // persist any pending analytics before exit
+            // Drop idle keep-alive sockets immediately and force-close lingering ones after a
+            // short grace so close() can't hang indefinitely on persistent connections.
+            server.closeIdleConnections?.();
+            const grace = setTimeout(() => server.closeAllConnections?.(), 1000);
+            grace.unref?.();
+            server.close(() => {
+              clearTimeout(grace);
+              done();
+            });
           }),
       });
     });
@@ -525,14 +564,17 @@ export async function runRelayServer(): Promise<void> {
   const cfg = resolveServerConfig();
   const running = await startServer(cfg);
   const admission = cfg.open ? "OPEN (admission disabled)" : cfg.accessToken ? "TOKEN (X-TL-Access required)" : "WARN NO TOKEN (recommended: set TL_RELAY_ACCESS_TOKEN or TL_RELAY_OPEN=true)";
-  // Internal implementation note.
+  // Machine-readable line on stdout so callers can detect the actual bound port (banner goes to stderr below).
   console.log(`TL_RELAY_LISTENING ${running.port}`);
   process.stderr.write(
     `Shellmates relay/directory v${SERVER_VERSION} → http://${cfg.host}:${running.port}\n` +
       `  data: ${cfg.dataRoot}\n  admission: ${admission}\n  allowlist: ${cfg.allowlist ? cfg.allowlist.size + " agents" : "off"}\n`,
   );
   const shutdown = (): void => {
-    running.close().then(() => process.exit(0));
+    // Hard-stop fallback so SIGTERM/SIGINT always terminate even if a socket lingers.
+    const force = setTimeout(() => process.exit(0), 5000);
+    force.unref?.();
+    running.close().then(() => process.exit(0)).catch(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

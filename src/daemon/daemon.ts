@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Internal implementation note.
-// Internal implementation note.
+// Background daemon: polls the relay on an interval, ingesting new messages
+// and emitting a desktop bell + stderr notification line on fresh activity.
 import { spawnSync } from "node:child_process";
 import { isMainEntry } from "../core/entry.js";
 import { Engine } from "../core/engine.js";
@@ -15,19 +15,19 @@ function playSound(): void {
       spawnSync("afplay", ["/System/Library/Sounds/Glass.aiff"], { stdio: "ignore", timeout: 3000 });
     }
   } catch {
-    /* Internal implementation note. */
+    /* Sound is best-effort; ignore failures (no afplay, sandbox, etc.). */
   }
 }
 
 function notifyLine(engine: Engine): void {
   const n = engine.state.notifications;
-  // Internal implementation note.
+  // Print a one-line unread summary to stderr (keeps stdout clean for --once JSON).
   process.stderr.write(
     `🔔 Shellmates: ${n.unread} unread — last "${n.last_event ?? "-"}" from ${n.last_from_alias ?? "-"}\n`,
   );
 }
 
-/** Internal implementation note. */
+/** Run one poll cycle; sound + notify only when new messages or unread count rose. */
 export function tick(engine: Engine): IngestResult {
   const before = engine.state.notifications.unread;
   const r = engine.poll();

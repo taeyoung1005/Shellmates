@@ -1,4 +1,4 @@
-// Internal implementation note.
+// Local on-disk state store: atomic writes, advisory file locking, and notification sidecar.
 import {
   closeSync,
   existsSync,
@@ -27,6 +27,7 @@ export function emptyState(): State {
     no_resuggest: [],
     reports: [],
     seen_env: [],
+    seen_conversations: [],
     notifications: {
       unread: 0,
       last_from_alias: null,
@@ -42,9 +43,9 @@ export function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
 }
 
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Write to a unique temp file then rename into place so readers never see a
+// partially written file. The temp name includes pid + timestamp to avoid
+// collisions, and the file is created with the given mode (default 0o600).
 function atomicWrite(path: string, data: string, mode = 0o600): void {
   ensureDir(dirname(path));
   const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
@@ -52,7 +53,7 @@ function atomicWrite(path: string, data: string, mode = 0o600): void {
   try {
     renameSync(tmp, path);
   } catch (e) {
-    // Internal implementation note.
+    // Rename failed; clean up the leftover temp file before rethrowing.
     try {
       rmSync(tmp, { force: true });
     } catch {
@@ -63,9 +64,8 @@ function atomicWrite(path: string, data: string, mode = 0o600): void {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
- * Internal implementation note.
+ * Atomically write a file containing secret material (e.g. identity keys)
+ * with owner-only 0o600 permissions.
  */
 export function writeSecretFile(path: string, data: string): void {
   atomicWrite(path, data, 0o600);
@@ -76,8 +76,13 @@ export function loadState(ctx: Ctx): State {
   try {
     const raw = readFileSync(ctx.statePath, "utf8");
     const parsed = JSON.parse(raw) as Partial<State>;
-    // Internal implementation note.
-    return { ...emptyState(), ...parsed } as State;
+    const base = emptyState();
+    const merged = { ...base, ...parsed } as State;
+    // Deep-merge the nested objects so an older/partial state.json keeps its defaults
+    // (e.g. settings.cold_days, notification fields) instead of being wiped by a top-level spread.
+    merged.settings = { ...base.settings, ...(parsed.settings ?? {}) };
+    merged.notifications = { ...base.notifications, ...(parsed.notifications ?? {}) };
+    return merged;
   } catch {
     return emptyState();
   }
@@ -85,7 +90,7 @@ export function loadState(ctx: Ctx): State {
 
 export function saveState(ctx: Ctx, state: State): void {
   atomicWrite(ctx.statePath, JSON.stringify(state, null, 2));
-  // Internal implementation note.
+  // Keep the notification sidecar file in sync with the saved state.
   writeNotify(ctx, state.notifications);
 }
 
@@ -94,14 +99,14 @@ export function writeNotify(ctx: Ctx, n: NotificationState): void {
 }
 
 function sleepSync(ms: number): void {
-  // Internal implementation note.
+  // Block the current thread for ms by waiting on an Atomics value that never changes.
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
- * Internal implementation note.
+ * Run fn while holding an advisory lock (an exclusively-created `.lock` file)
+ * on the state file. Spins until the lock is acquired or a 5s deadline passes,
+ * and always releases the lock afterward.
  */
 export function withLock<T>(ctx: Ctx, fn: () => T): T {
   const lockPath = ctx.statePath + ".lock";
@@ -114,14 +119,15 @@ export function withLock<T>(ctx: Ctx, fn: () => T): T {
       break;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      // Internal implementation note.
+      // Lock already exists: treat it as stale and steal it if older than 10s,
+      // otherwise keep waiting.
       try {
         if (Date.now() - statSync(lockPath).mtimeMs > 10000) {
           rmSync(lockPath);
           continue;
         }
       } catch {
-        /* Internal implementation note. */
+        /* lock vanished between stat and rm; fall through and retry */
       }
       if (Date.now() > deadline) throw new Error("state lock timeout");
       sleepSync(20);

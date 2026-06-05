@@ -1,5 +1,5 @@
-// Internal implementation note.
-// Internal implementation note.
+// File-based relay: signed envelopes are written to per-recipient inbox
+// directories under ctx.relayDir and polled/deleted by the addressee.
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Ctx } from "./config.js";
@@ -12,7 +12,7 @@ function inboxDir(ctx: Ctx, agentId: string): string {
   return join(ctx.relayDir, agentId);
 }
 
-/** Internal implementation note. */
+/** Drop an envelope into the recipient's inbox, keyed by its envelope id. */
 export function sendEnvelope(ctx: Ctx, env: Envelope): void {
   if (!isAgentId(env.to)) throw new Error(`invalid recipient agent_id: ${env.to}`);
   if (!isPrefixedId(env.id, "env")) throw new Error(`invalid envelope id: ${env.id}`);
@@ -26,7 +26,7 @@ export interface PolledEnvelope {
   path: string;
 }
 
-/** Internal implementation note. */
+/** Read all envelopes from my inbox, sorted oldest-first; missing inbox yields []. */
 export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
   const dir = inboxDir(ctx, myAgentId);
   if (!existsSync(dir)) return [];
@@ -38,7 +38,7 @@ export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
       const env = JSON.parse(readFileSync(path, "utf8")) as Envelope;
       out.push({ env, path });
     } catch {
-      // Internal implementation note.
+      // Unparseable/corrupt envelope file: discard it and move on.
       try {
         rmSync(path);
       } catch {
@@ -46,8 +46,9 @@ export function pollEnvelopes(ctx: Ctx, myAgentId: string): PolledEnvelope[] {
       }
     }
   }
-  // Internal implementation note.
-  out.sort((a, b) => a.env.created_at.localeCompare(b.env.created_at));
+  // Oldest-first by creation time, with envelope id as a deterministic tie-break so
+  // same-millisecond events apply in a stable order across processes.
+  out.sort((a, b) => a.env.created_at.localeCompare(b.env.created_at) || a.env.id.localeCompare(b.env.id));
   return out;
 }
 

@@ -1,7 +1,7 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Core crypto primitives for Shellmates identity, encrypted messaging, and
+// signed-request auth: Ed25519 signatures, x25519 ECDH + HKDF + AES-256-GCM
+// for 1:1 messages, scrypt + AES-256-GCM for passphrase-encrypted secrets,
+// and canonicalized envelope/auth signing.
 import {
   createCipheriv,
   createDecipheriv,
@@ -23,9 +23,9 @@ import { b64url, canonicalize, fromB64url, newNonce, nowIso } from "./util.js";
 const HKDF_INFO = Buffer.from("shellmates-msg-v0.1");
 
 /**
- * Internal implementation note.
- * Internal implementation note.
- * Internal implementation note.
+ * Derives the public agent_id from an Ed25519 sign public key: the first
+ * 16 hex chars (64 bits) of its SHA-256 digest, prefixed "agent_".
+ * Returns "agent_invalid" on non-string input or decode failure.
  */
 export function agentIdFromSignPub(signPubB64: string): string {
   if (typeof signPubB64 !== "string") return "agent_invalid";
@@ -38,7 +38,7 @@ export function agentIdFromSignPub(signPubB64: string): string {
   }
 }
 
-/** Internal implementation note. */
+/** Generates a fresh identity: an Ed25519 sign keypair and an x25519 box keypair (raw JWK coordinates), with agent_id derived from the sign pubkey. */
 export function generateIdentity(): Identity {
   const ed = generateKeyPairSync("ed25519");
   const x = generateKeyPairSync("x25519");
@@ -63,7 +63,7 @@ export function publicIdentity(id: Identity): PublicIdentity {
   return { agent_id: id.agent_id, sign_pub: id.sign_pub, box_pub: id.box_pub };
 }
 
-// Internal implementation note.
+// Rebuild Node KeyObjects from raw JWK base64url coordinates (x = pubkey, d = privkey scalar).
 function edPublicKey(x: string): KeyObject {
   return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" });
 }
@@ -77,7 +77,7 @@ function xPrivateKey(x: string, d: string): KeyObject {
   return createPrivateKey({ key: { kty: "OKP", crv: "X25519", x, d }, format: "jwk" });
 }
 
-// Internal implementation note.
+// Ed25519-sign the given bytes (strings are UTF-8 encoded) and return the signature as base64url.
 export function signBytes(data: Buffer | string, identity: Identity): string {
   const buf = typeof data === "string" ? Buffer.from(data) : data;
   const key = edPrivateKey(identity.sign_pub, identity.sign_priv);
@@ -94,7 +94,7 @@ export function verifyBytes(data: Buffer | string, sigB64: string, signPubB64: s
   }
 }
 
-// Internal implementation note.
+// Compute the raw x25519 ECDH shared secret between my box keypair and their box pubkey.
 function sharedSecret(myBoxPriv: string, myBoxPub: string, theirBoxPub: string): Buffer {
   const priv = xPrivateKey(myBoxPub, myBoxPriv);
   const pub = xPublicKey(theirBoxPub);
@@ -131,8 +131,8 @@ export function decryptFrom(blob: CipherBlob, theirBoxPub: string, me: Identity)
   return pt.toString("utf8");
 }
 
-// Internal implementation note.
-// Internal implementation note.
+// Passphrase-encrypted secret container: scrypt-derived key + AES-256-GCM.
+// Used to encrypt locally-stored secrets (e.g. private keys) at rest.
 export interface SecretBox {
   v: "tl-secret-1";
   kdf: "scrypt";
@@ -162,7 +162,8 @@ export function decryptWithPassphrase(box: SecretBox, passphrase: string): strin
   return Buffer.concat([decipher.update(fromB64url(box.ct)), decipher.final()]).toString("utf8");
 }
 
-// Internal implementation note.
+// Canonical bytes signed for an envelope: every field except `signature`,
+// canonicalized (sorted keys, undefined dropped) so signing is deterministic.
 function envelopeSigningPayload(env: Envelope): string {
   const { signature, ...rest } = env;
   void signature;
@@ -176,8 +177,9 @@ export function signEnvelope(env: Envelope, identity: Identity): Envelope {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
+ * Verifies an envelope's signature. Requires a signature to be present and
+ * checks that the sender's sign pubkey hashes to the envelope's `from`
+ * agent_id (binding) before verifying the canonical payload.
  */
 export function verifyEnvelope(env: Envelope, senderSignPub: string): boolean {
   if (!env.signature) return false;
@@ -185,10 +187,9 @@ export function verifyEnvelope(env: Envelope, senderSignPub: string): boolean {
   return verifyBytes(envelopeSigningPayload(env), env.signature, senderSignPub);
 }
 
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Signed-request auth scheme for the relay/directory server. Clients sign a
+// canonical payload over (method, path, agent_id, ts, nonce); the server
+// verifies the signature and rejects timestamps outside AUTH_SKEW_MS (2 min).
 export const AUTH_SCHEME = "TL-Sig";
 export const AUTH_VERSION = "0.1";
 export const AUTH_SKEW_MS = 2 * 60 * 1000;
@@ -197,7 +198,7 @@ function authSigningPayload(method: string, path: string, agentId: string, ts: s
   return canonicalize({ method: method.toUpperCase(), path, agent_id: agentId, ts, nonce });
 }
 
-/** Internal implementation note. */
+/** Builds an Authorization header value signing (method, path, agent_id, fresh ts + nonce) and embedding the sign pubkey for verification. */
 export function signAuth(identity: Identity, method: string, path: string): string {
   const ts = nowIso();
   const nonce = newNonce();
@@ -205,7 +206,7 @@ export function signAuth(identity: Identity, method: string, path: string): stri
   return `${AUTH_SCHEME} v=${AUTH_VERSION}, agent_id=${identity.agent_id}, pub=${identity.sign_pub}, ts=${ts}, nonce=${nonce}, sig=${sig}`;
 }
 
-/** Internal implementation note. */
+/** Parses a "TL-Sig k=v, k=v, ..." Authorization header into a key/value map, or null if absent or not the expected scheme. */
 export function parseAuthHeader(header: string | undefined): Record<string, string> | null {
   if (!header) return null;
   const trimmed = header.trim();
@@ -230,8 +231,11 @@ export interface AuthResult {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
+ * Verifies a signed request: checks scheme/version, presence of all fields,
+ * that the pubkey binds to the claimed agent_id, that ts is parseable and
+ * within AUTH_SKEW_MS of `now`, and that the signature over the canonical
+ * payload is valid. Returns the agent_id and nonce on success (nonce left to
+ * the caller for replay tracking).
  */
 export function verifyAuth(
   header: string | undefined,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Internal implementation note.
-// Internal implementation note.
+// End-to-end demo: two engines (Alice, Bob) talk only through a real relay/directory
+// server process, exercising discovery, encrypted chat, and the security guards.
 import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   log(`server: ${srv.baseUrl}  (data: ${serverData})`);
 
   try {
-    // Internal implementation note.
+    // Each engine gets isolated home/net dirs but points at the same server URL and token.
     const aliceEnv = {
       TL_HOME: join(root, "alice"),
       TL_NET: join(root, "alice-net"),
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
     let inspected = 0;
     let foundPlaintext = false;
     const plaintextNeedles = ["Nice to meet", "metadata", "across the network", "Exactly"];
-    // Internal implementation note.
+    // Send a uniquely-worded message, then verify it never lands on the server as plaintext.
     assert.ok(alice.send("This sentence must not be stored as plaintext on the server disk.").ok);
     try {
       for (const f of readdirSync(bobInboxDir)) {
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
         if (plaintextNeedles.some((n) => raw.includes(n)) || raw.includes("stored as plaintext")) foundPlaintext = true;
       }
     } catch {
-      /* Internal implementation note. */
+      /* inbox dir may not exist yet; treated as zero inspected envelopes */
     }
     log(`  inspected server-stored envelopes: ${inspected}, plaintext found: ${foundPlaintext}`);
     assert.ok(inspected > 0, "server should store at least one envelope");
@@ -125,7 +125,8 @@ async function main(): Promise<void> {
     assert.equal(unauth.status, 401, "inbox read without signature auth should return 401");
 
     hr("7) security: forged envelope from Alice signed by attacker is posted directly, then rejected by client");
-    // Internal implementation note.
+    // Build an envelope claiming from=Alice but signed with the attacker's key, so the
+    // signature check against Alice's sign pubkey fails and the body never reaches the chat.
     const { generateIdentity, signEnvelope, encryptFor } = await import("../core/crypto.js");
     const { PROTOCOL_VERSION } = await import("../core/types.js");
     const { newId, newNonce, nowIso } = await import("../core/util.js");
@@ -165,7 +166,7 @@ async function main(): Promise<void> {
     bob.poll();
     assert.equal(bob.open().chat, null, "Bob should receive the end notification");
 
-    // Internal implementation note.
+    // Confirm server-only transport: the local shared directory was never populated with cards.
     const aliceLocalDir = join(root, "alice-net", "directory");
     let aliceLocalCards = 0;
     try {

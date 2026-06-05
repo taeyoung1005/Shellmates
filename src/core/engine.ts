@@ -1,5 +1,5 @@
-// Internal implementation note.
-// Internal implementation note.
+// Engine: high-level façade over identity, profiles, matching, messaging and the
+// relay transport. Wraps every state mutation in a locked, persist-then-acknowledge tx.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { coachDraft, coachReply } from "./coaching.js";
@@ -25,6 +25,7 @@ import { buildProfile, signProfile, verifyCard } from "./profile.js";
 import { loadState, saveState, withLock, writeSecretFile } from "./store.js";
 import { getTransport, type Transport } from "./transport.js";
 import type {
+  ChannelCollector,
   ChannelItem,
   Chat,
   CoachingPayload,
@@ -32,37 +33,33 @@ import type {
   IntroRecord,
   MatchResult,
   NotificationState,
+  OpResult,
   ProfileAnswers,
   ProfileCard,
   State,
 } from "./types.js";
 
-export interface EngineResult {
-  ok: boolean;
-  message: string;
-}
+export type EngineResult = OpResult;
 
 export class Engine {
   readonly ctx: Ctx;
   state: State;
-  /** Internal implementation note. */
+  /** Relay/directory transport used to publish cards and ferry envelopes. */
   readonly tp: Transport;
-  /** Internal implementation note. */
+  /** LLM callable backing the coaching/observe features. */
   readonly llm: LlmFn;
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Buffer of live-channel items accumulated during ingest, flushed to channelSink
+   * on a microtask so a burst of items is delivered in one batch.
    */
   private chanBuf: ChannelItem[] = [];
-  /** Internal implementation note. */
+  /** Optional consumer that receives batched channel items (set by the live MCP channel). */
   private channelSink?: (items: ChannelItem[]) => void | Promise<void>;
   private flushScheduled = false;
   private readonly collectItem = (it: ChannelItem): void => {
-    // Internal implementation note.
-    // Internal implementation note.
-    // Internal implementation note.
+    // Buffer the item and schedule a single microtask flush; with no sink registered
+    // there is nothing to deliver to, so drop it.
     if (!this.channelSink) return;
     this.chanBuf.push(it);
     if (!this.flushScheduled) {
@@ -74,11 +71,11 @@ export class Engine {
       });
     }
   };
-  /** Internal implementation note. */
+  /** Register the consumer for batched live-channel items. */
   setChannelSink(fn: (items: ChannelItem[]) => void | Promise<void>): void {
     this.channelSink = fn;
   }
-  /** Internal implementation note. */
+  /** Remove and return all buffered channel items. */
   drainChannelItems(): ChannelItem[] {
     return this.chanBuf.splice(0);
   }
@@ -106,25 +103,51 @@ export class Engine {
     return this.state.identity?.agent_id ?? null;
   }
 
-  /** Internal implementation note. */
+  /**
+   * Locked read-modify-write of the persisted state. Skips the disk write entirely when
+   * fn() leaves the state unchanged (idle poll ticks), avoiding two atomic writes per tick.
+   */
   private tx<T>(fn: () => T): T {
     return withLock(this.ctx, () => {
       this.state = loadState(this.ctx);
+      const before = JSON.stringify(this.state);
       const r = fn();
-      saveState(this.ctx, this.state);
+      if (JSON.stringify(this.state) !== before) saveState(this.ctx, this.state);
       return r;
     });
   }
 
-  /** Internal implementation note. */
+  /** Locked-free read snapshot of the persisted state. */
   private rx<T>(fn: () => T): T {
     this.state = loadState(this.ctx);
     return fn();
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
+   * Poll+ingest inbound envelopes inside one locked tx, run optional follow-up work, then
+   * acknowledge (delete) the consumed relay envelopes ONLY after the state is durably saved
+   * (persist-before-acknowledge, rob-01) and outside the lock so the network round-trips do
+   * not extend the lock-hold window.
+   */
+  private ingestTx<T>(body: (ingest: IngestResult) => T, collect: ChannelCollector = this.collectItem): T {
+    const acks: string[] = [];
+    const out = this.tx(() => {
+      const ingest = pollAndIngest(this.tp, this.state, collect, acks);
+      return body(ingest);
+    });
+    for (const ref of acks) {
+      try {
+        this.tp.deleteEnvelope(ref);
+      } catch {
+        /* a failed delete just re-fetches next poll and drops as already-seen */
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Run fn, converting any thrown error into a result via onErr so callers always
+   * get a structured OpResult instead of an exception.
    */
   private guard<T>(fn: () => T, onErr: (msg: string) => T): T {
     try {
@@ -135,20 +158,16 @@ export class Engine {
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Outbound-operation helper: first ingest pending inbound envelopes (so the send
+   * acts on up-to-date state, e.g. a peer's accept/decline), then run the send inside
+   * a locked tx, mapping any failure through onErr.
    */
   private sendAfterIngest<T>(send: () => T, onErr: (msg: string) => T): T {
-    this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
-    });
+    this.ingestTx(() => undefined);
     return this.guard(() => this.tx(send), onErr);
   }
 
-  // Internal implementation note.
+  // Create the Ed25519/x25519 identity, or report the existing agent_id if already present.
   init(): EngineResult & { agent_id?: string } {
     return this.tx(() => {
       if (this.state.identity) {
@@ -162,7 +181,7 @@ export class Engine {
   makeProfile(answers: ProfileAnswers): EngineResult & { card?: ProfileCard } {
     return this.tx(() => {
       if (!this.state.identity) return { ok: false, message: "Run init first." };
-      // Internal implementation note.
+      // Default the card's home_relay to the configured server when the caller left it unset.
       const enriched: ProfileAnswers =
         !answers.home_relay && this.ctx.server ? { ...answers, home_relay: this.ctx.server.baseUrl } : answers;
       const signed = signProfile(this.state.identity, buildProfile(this.state.identity, enriched));
@@ -177,8 +196,8 @@ export class Engine {
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
+   * Run the local agent-assisted observer over the given roots (or defaults) to
+   * draft profile answers from the user's own files; no state is mutated.
    */
   observeForProfile(opts?: { roots?: string[] }): ObserveResult {
     return observeProfile({ llm: this.llm, ...(opts?.roots ? { roots: opts.roots } : {}) });
@@ -208,7 +227,7 @@ export class Engine {
     });
   }
 
-  /** Internal implementation note. */
+  /** Write the signed public profile card to a JSON file for sharing. */
   exportProfile(outPath?: string): EngineResult & { path?: string; card?: ProfileCard } {
     return this.rx(() => {
       if (!this.state.profile?.signature) return { ok: false, message: "No profile to export. Create a profile first." };
@@ -218,7 +237,7 @@ export class Engine {
     });
   }
 
-  /** Internal implementation note. */
+  /** Load a peer's exported card, verify its signature/expiry, and publish it to the directory. */
   importProfile(inPath: string): EngineResult & { owner?: string } {
     return this.rx(() => {
       if (!existsSync(inPath)) return { ok: false, message: `File not found: ${inPath}` };
@@ -240,7 +259,7 @@ export class Engine {
     });
   }
 
-  /** Internal implementation note. */
+  /** Build a shellmates:// invite link to this agent so peers on the same directory can intro. */
   invite(): EngineResult & { link?: string } {
     return this.rx(() => {
       if (!this.state.identity) return { ok: false, message: "Run init first." };
@@ -250,8 +269,10 @@ export class Engine {
     });
   }
 
-  // Internal implementation note.
-  /** Internal implementation note. */
+  /**
+   * Back up the full private identity to a 0600 file. With a passphrase the JSON is
+   * encrypted via encryptWithPassphrase; otherwise it is written in plaintext.
+   */
   backupKey(outPath?: string, passphrase?: string): EngineResult & { path?: string; encrypted?: boolean } {
     return this.rx(() => {
       if (!this.state.identity) return { ok: false, message: "No identity to back up." };
@@ -267,7 +288,10 @@ export class Engine {
     });
   }
 
-  /** Internal implementation note. */
+  /**
+   * Restore an identity from a backup file (decrypting if it is a SecretBox), then
+   * verify that agent_id matches the hash of sign_pub before adopting it.
+   */
   importKey(inPath: string, passphrase?: string): EngineResult & { agent_id?: string } {
     return this.tx(() => {
       if (!existsSync(inPath)) return { ok: false, message: `File not found: ${inPath}` };
@@ -305,7 +329,7 @@ export class Engine {
       if (this.state.published) this.tp.revokeCard(this.state.identity.agent_id);
       const fresh = generateIdentity();
       this.state.identity = fresh;
-      // Internal implementation note.
+      // The old identity is gone, so wipe all state bound to it (profile, chats, intros).
       this.state.profile = null;
       this.state.published = false;
       this.state.active_chat = null;
@@ -315,13 +339,10 @@ export class Engine {
     });
   }
 
-  // Internal implementation note.
+  // Fetch directory cards and rank them against our profile, excluding blocked/no-resuggest/self.
   scan(): EngineResult & { matches: MatchResult[] } {
-    // Internal implementation note.
-    this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
-    });
-    // Internal implementation note.
+    // Commit any inbound ingest first so a later throw in scanCards can't lose it.
+    this.ingestTx(() => undefined);
     return this.guard(
       () =>
         this.rx(() => {
@@ -346,10 +367,10 @@ export class Engine {
     }
   }
 
-  // Internal implementation note.
+  // Poll the relay and ingest inbound envelopes; on error report an empty ingest result.
   poll(): IngestResult {
     return this.guard(
-      () => this.tx(() => pollAndIngest(this.tp, this.state, this.collectItem)),
+      () => this.ingestTx((ingest) => ingest),
       () => ({ ingested: 0, rejected: 0, events: [] }),
     );
   }
@@ -365,21 +386,15 @@ export class Engine {
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Poll+ingest once and return the live-channel items produced by this tick directly,
+   * bypassing the buffered channelSink so the caller (a one-shot channel poll) owns
+   * delivery. Errors are swallowed and yield an empty list.
    */
   channelPoll(): ChannelItem[] {
-    // Internal implementation note.
-    // Internal implementation note.
+    // Collect items locally (not via the buffered channel sink) so this caller drives delivery.
     const items: ChannelItem[] = [];
     this.guard(
-      () =>
-        this.tx(() => {
-          pollAndIngest(this.tp, this.state, (it) => items.push(it));
-        }),
+      () => this.ingestTx(() => undefined, (it) => items.push(it)),
       () => undefined,
     );
     return items;
@@ -397,10 +412,11 @@ export class Engine {
   }
 
   inbox(): EngineResult & { intros: IntroRecord[] } {
-    return this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
-      return { ok: true, message: `${this.state.inbox_intros.length} received intro(s).`, intros: this.state.inbox_intros };
-    });
+    return this.ingestTx(() => ({
+      ok: true,
+      message: `${this.state.inbox_intros.length} received intro(s).`,
+      intros: this.state.inbox_intros,
+    }));
   }
 
   accept(introId: string): EngineResult {
@@ -417,10 +433,9 @@ export class Engine {
     );
   }
 
-  /** Internal implementation note. */
+  /** Show the active 1:1 chat, clear the unread counter, and attach reply coaching plus a cold-chat flag. */
   open(): EngineResult & { chat: Chat | null; coaching?: CoachingPayload; cold?: boolean } {
-    return this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
+    return this.ingestTx(() => {
       const chat = this.state.active_chat;
       const cold = coldCheck(this.state);
       this.state.notifications = { ...this.state.notifications, unread: 0 };
@@ -437,8 +452,7 @@ export class Engine {
   }
 
   reply(): EngineResult & { coaching?: CoachingPayload } {
-    return this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
+    return this.ingestTx(() => {
       const chat = this.state.active_chat;
       if (!chat) return { ok: false, message: "No open chat." };
       return { ok: true, message: "Reply coaching", coaching: coachReply(chat, this.llm) };
@@ -479,12 +493,9 @@ export class Engine {
     });
   }
 
-  // Internal implementation note.
+  // Ingest first so the returned notification state reflects freshly received envelopes.
   notificationState(): NotificationState {
-    return this.tx(() => {
-      pollAndIngest(this.tp, this.state, this.collectItem);
-      return this.state.notifications;
-    });
+    return this.ingestTx(() => this.state.notifications);
   }
 
   status(): {

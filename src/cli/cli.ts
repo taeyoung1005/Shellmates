@@ -167,6 +167,9 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
         if (typeof flags.name === "string") merged.display_name = flags.name;
         if (typeof flags.hours === "string") merged.activity_hours = flags.hours;
         else if (obs.draft.activity_hours) merged.activity_hours = obs.draft.activity_hours;
+        // Carry through flags that the observed-draft merge doesn't reconstruct.
+        if (answers.long_form !== undefined) merged.long_form = answers.long_form;
+        if (answers.home_relay) merged.home_relay = answers.home_relay;
         answers = merged;
         observeNote = `\n  (observed: ${obs.source}, files=${obs.scannedFiles}, chars=${obs.chars} — ${obs.note})`;
       }
@@ -207,7 +210,10 @@ export function dispatch(engine: Engine, p: Parsed): { result: unknown; human: s
     }
     case "intro": {
       if (!arg0) return { result: { ok: false }, human: "Usage: intro <agent_id> [\"message\"]" };
-      const r = engine.intro(arg0, positionals[1]);
+      // Recombine the remaining tokens so an unquoted multi-word message is not truncated,
+      // matching send/coach. slice(1) drops the agent_id; undefined keeps the no-message path.
+      const message = positionals.length > 1 ? positionals.slice(1).join(" ") : undefined;
+      const r = engine.intro(arg0, message);
       return wrap(r);
     }
     case "poll": {

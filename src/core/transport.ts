@@ -1,11 +1,11 @@
-// Internal implementation note.
-// Internal implementation note.
+// Transport abstraction over the directory + relay backend.
+// Selects an HTTP relay/directory server or a local-filesystem fallback.
 import type { Ctx } from "./config.js";
 import { HttpTransport } from "./transport-http.js";
 import { LocalFsTransport } from "./transport-local.js";
 import type { Envelope, Identity, PresenceInfo, ProfileCard, PublicProfileCard } from "./types.js";
 
-/** Internal implementation note. */
+/** A relayed envelope plus the backend ref used to delete it after processing. */
 export interface PolledEnvelope {
   env: Envelope;
   ref: string;
@@ -18,8 +18,8 @@ export interface DirectoryQuery {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
+ * Backend interface for the directory (profile cards) and relay (envelopes).
+ * Implemented by both the HTTP server client and the local-filesystem fallback.
  */
 export interface Transport {
   // directory
@@ -35,8 +35,8 @@ export interface Transport {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
+ * Picks the transport for the current context: the HTTP relay when a server is
+ * configured (passing identity for signed requests), otherwise the local fallback.
  */
 export function getTransport(ctx: Ctx, getIdentity: () => Identity | null = () => null): Transport {
   if (ctx.server) return new HttpTransport(ctx.server.baseUrl, getIdentity, ctx.server.accessToken);

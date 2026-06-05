@@ -1,6 +1,6 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Helper to spawn the relay/directory server as a child process for tests
+// and local use. Launches src/server entry, waits for its TL_RELAY_LISTENING
+// stdout marker to learn the OS-assigned port, and exposes graceful shutdown.
 import { spawn, type ChildProcess } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,11 @@ export interface SpawnOptions {
   readyTimeoutMs?: number;
 }
 
-/** Internal implementation note. */
+/**
+ * Spawn the relay server on an ephemeral port (TL_RELAY_PORT=0) and resolve once
+ * it prints "TL_RELAY_LISTENING <port>" on stdout, rejecting on early exit,
+ * spawn error, or readiness timeout. Runs via tsx when invoked from a .ts entry.
+ */
 export function spawnRelayServer(opts: SpawnOptions = {}): Promise<SpawnedServer> {
   const selfPath = fileURLToPath(import.meta.url);
   const here = dirname(selfPath);
@@ -61,7 +65,8 @@ export function spawnRelayServer(opts: SpawnOptions = {}): Promise<SpawnedServer
               if (proc.exitCode !== null || proc.signalCode) return done();
               proc.once("exit", () => done());
               proc.kill("SIGTERM");
-              // Internal implementation note.
+              // Escalate to SIGKILL if the process hasn't exited within 1.5s;
+              // unref the timer so it never keeps the event loop alive.
               setTimeout(() => {
                 if (proc.exitCode === null && !proc.signalCode) proc.kill("SIGKILL");
               }, 1500).unref?.();

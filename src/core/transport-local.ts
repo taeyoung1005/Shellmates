@@ -1,5 +1,5 @@
-// Internal implementation note.
-// Internal implementation note.
+// Local filesystem-backed Transport: directory and relay live on disk under ctx,
+// so this implementation just delegates to the directory/relay modules with no network.
 import type { Ctx } from "./config.js";
 import { lookupCard, publishCard, revokeCard, scanCards } from "./directory.js";
 import { deleteEnvelope, pollEnvelopes, sendEnvelope } from "./relay.js";
@@ -31,7 +31,7 @@ export class LocalFsTransport implements Transport {
   }
 
   pollEnvelopes(myAgentId: string): PolledEnvelope[] {
-    // Internal implementation note.
+    // Expose each on-disk envelope's file path as the opaque `ref` used to delete it later.
     return pollEnvelopes(this.ctx, myAgentId).map(({ env, path }) => ({ env, ref: path }));
   }
 

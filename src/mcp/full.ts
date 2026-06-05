@@ -57,6 +57,8 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
         matching_modes: z.array(z.enum(["dating", "builder", "friend", "founder"])).optional(),
         display_name: z.string().optional(),
         activity_hours: z.string().optional(),
+        home_relay: z.string().optional(),
+        long_form: z.boolean().optional(),
       },
     },
     async (a) => {
@@ -71,6 +73,8 @@ export function registerShellmatesTools(server: McpServer, opts: ShellmatesTools
         ...(a.matching_modes ? { matching_modes: a.matching_modes } : {}),
         ...(a.display_name ? { display_name: a.display_name } : {}),
         ...(a.activity_hours ? { activity_hours: a.activity_hours } : {}),
+        ...(a.home_relay ? { home_relay: a.home_relay } : {}),
+        ...(a.long_form !== undefined ? { long_form: a.long_form } : {}),
       };
       const r = e.makeProfile(answers);
       return out({ ok: r.ok, message: r.message });

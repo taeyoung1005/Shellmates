@@ -1,6 +1,6 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Human-to-human messaging: intro/accept/decline handshake, encrypted 1:1 chat,
+// and the poll-and-ingest loop that verifies, deduplicates, and applies inbound
+// signed envelopes to local State.
 import {
   agentIdFromSignPub,
   decryptFrom,
@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   Envelope,
   IntroRecord,
+  OpResult,
   PublicIdentity,
   PublicProfileCard,
   State,
@@ -26,11 +27,13 @@ import { PROTOCOL_VERSION } from "./types.js";
 import { newId, newNonce, nowIso } from "./util.js";
 
 const SEEN_CAP = 2000;
+const SEEN_CONVERSATION_CAP = 1000;
+const FIRST_MESSAGE_MAX_CHARS = 2000;
+const INBOX_INTRO_CAP = 50;
+const MAX_CHAT_MESSAGES = 1000;
+const PAST_CHATS_CAP = 200;
 
-export interface Result {
-  ok: boolean;
-  message: string;
-}
+export type Result = OpResult;
 
 export interface IngestResult {
   ingested: number;
@@ -66,6 +69,22 @@ function markSeen(state: State, id: string): void {
   }
 }
 
+function markConversation(state: State, conv: string): void {
+  if (!state.seen_conversations) state.seen_conversations = [];
+  if (state.seen_conversations.includes(conv)) return;
+  state.seen_conversations.push(conv);
+  if (state.seen_conversations.length > SEEN_CONVERSATION_CAP) {
+    state.seen_conversations = state.seen_conversations.slice(-SEEN_CONVERSATION_CAP);
+  }
+}
+
+function pushPastChat(state: State, chat: Chat): void {
+  state.past_chats.push(chat);
+  if (state.past_chats.length > PAST_CHATS_CAP) {
+    state.past_chats.splice(0, state.past_chats.length - PAST_CHATS_CAP);
+  }
+}
+
 function pushMessage(chat: Chat, direction: "in" | "out", from: string, text: string, flagged?: boolean, flags?: string[]): ChatMessage {
   const msg: ChatMessage = {
     msg_id: newId("msg"),
@@ -76,13 +95,22 @@ function pushMessage(chat: Chat, direction: "in" | "out", from: string, text: st
     ...(flagged ? { flagged: true, flags: flags ?? [] } : {}),
   };
   chat.messages.push(msg);
+  // Bound conversation history so the serialized State (rewritten every poll tick) cannot
+  // grow without limit; the UI only ever shows the most recent messages.
+  if (chat.messages.length > MAX_CHAT_MESSAGES) {
+    chat.messages.splice(0, chat.messages.length - MAX_CHAT_MESSAGES);
+  }
   chat.last_activity = msg.created_at;
   return msg;
 }
 
-// Internal implementation note.
+// --- Outbound actions -------------------------------------------------------
 
-/** Internal implementation note. */
+/**
+ * Send a signed `intro` envelope to a target agent, optionally with an encrypted
+ * first message. Enforces the single-active-chat and single-pending-intro
+ * invariants and records the pending intro in `outbox_intro`.
+ */
 export function sendIntro(tp: Transport, state: State, targetAgentId: string, firstMessage?: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first (/shellmates init)." };
   if (!state.profile?.signature) return { ok: false, message: "Create and publish your profile first (/shellmates profile, /shellmates publish)." };
@@ -100,7 +128,7 @@ export function sendIntro(tp: Transport, state: State, targetAgentId: string, fi
 
   const conversation_id = newId("chat");
   const me = state.identity;
-  const fm = firstMessage ? firstMessage.slice(0, 2000) : undefined; // first-message length cap
+  const fm = firstMessage ? firstMessage.slice(0, FIRST_MESSAGE_MAX_CHARS) : undefined;
   const env: Envelope = {
     type: "intro",
     v: PROTOCOL_VERSION,
@@ -130,7 +158,7 @@ export function sendIntro(tp: Transport, state: State, targetAgentId: string, fi
   return { ok: true, message: `Intro sent to ${targetAgentId}. A 1:1 chat opens if they accept.` };
 }
 
-/** Internal implementation note. */
+/** Drop the pending outbound intro locally (no envelope is sent to the peer). */
 export function cancelIntro(state: State): Result {
   if (!state.outbox_intro) return { ok: false, message: "No pending intro." };
   const to = state.outbox_intro.to;
@@ -138,7 +166,11 @@ export function cancelIntro(state: State): Result {
   return { ok: true, message: `Canceled intro to ${to}.` };
 }
 
-/** Internal implementation note. */
+/**
+ * Accept an inbound intro: open the 1:1 chat, fold in any sanitized first
+ * message, send a signed `intro_accept` envelope, and remove the intro from the
+ * inbox.
+ */
 export function acceptIntro(tp: Transport, state: State, introId: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   if (state.active_chat) return { ok: false, message: "You are already in a 1:1 chat. End it first (/shellmates end)." };
@@ -179,7 +211,7 @@ export function acceptIntro(tp: Transport, state: State, introId: string): Resul
   return { ok: true, message: `Intro accepted. 1:1 chat opened with ${intro.profile.display_name ?? intro.peer.agent_id}.` };
 }
 
-/** Internal implementation note. */
+/** Decline an inbound intro: send a signed `intro_decline` and drop it from the inbox. */
 export function declineIntro(tp: Transport, state: State, introId: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const intro = state.inbox_intros.find((i) => i.intro_id === introId || i.conversation_id === introId);
@@ -199,7 +231,10 @@ export function declineIntro(tp: Transport, state: State, introId: string): Resu
   return { ok: true, message: "Intro declined." };
 }
 
-/** Internal implementation note. */
+/**
+ * Encrypt `text` to the active chat partner's box key, send it as a signed
+ * `message` envelope, and append it to the local chat as an outbound message.
+ */
 export function sendMessage(tp: Transport, state: State, text: string): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
@@ -223,7 +258,10 @@ export function sendMessage(tp: Transport, state: State, text: string): Result {
   return { ok: true, message: "Sent." };
 }
 
-/** Internal implementation note. */
+/**
+ * End the active chat: send a signed `end` envelope, mark the chat ended, add the
+ * partner to `no_resuggest` (and `blocked` if `block`), and archive it to past_chats.
+ */
 export function endChat(tp: Transport, state: State, block = false): Result {
   if (!state.identity) return { ok: false, message: "Run init first." };
   const chat = state.active_chat;
@@ -245,19 +283,22 @@ export function endChat(tp: Transport, state: State, block = false): Result {
   chat.ended_at = nowIso();
   if (!state.no_resuggest.includes(chat.partner.agent_id)) state.no_resuggest.push(chat.partner.agent_id);
   if (block && !state.blocked.includes(chat.partner.agent_id)) state.blocked.push(chat.partner.agent_id);
-  state.past_chats.push(chat);
+  pushPastChat(state, chat);
   const who = chat.partner_profile.display_name ?? chat.partner.agent_id;
   state.active_chat = null;
   return { ok: true, message: block ? `Ended the chat with ${who} and blocked them.` : `Ended the chat with ${who}.` };
 }
 
-/** Internal implementation note. */
+/**
+ * Block an agent (defaults to the active partner) one-way and silently: add to
+ * `blocked` and `no_resuggest`, with no envelope sent to the peer.
+ */
 export function blockAgent(tp: Transport, state: State, agentId?: string): Result {
   const target = agentId ?? state.active_chat?.partner.agent_id;
   if (!target) return { ok: false, message: "No target to block." };
   if (!state.blocked.includes(target)) state.blocked.push(target);
   if (!state.no_resuggest.includes(target)) state.no_resuggest.push(target);
-  // Internal implementation note.
+  // If we're currently chatting with the blocked peer, tear that chat down too.
   if (state.active_chat && state.active_chat.partner.agent_id === target) {
     endChat(tp, state, false);
   }
@@ -270,15 +311,22 @@ export function reportAgent(state: State, agentId: string, reason: string): Resu
   return { ok: true, message: `Reported ${agentId} (reason: ${reason || "not provided"}). They will be excluded from future recommendations.` };
 }
 
-// Internal implementation note.
+// --- Inbound ingest ---------------------------------------------------------
 
-/** Internal implementation note. */
+/**
+ * Resolve the sign-public-key the envelope must be verified against, derived from
+ * trusted local state rather than the envelope itself. For an `intro` the key
+ * comes from the self-describing sender_identity; for replies it must match the
+ * peer recorded in the relevant outbox_intro / active_chat. Returns null when the
+ * envelope does not correspond to an expected conversation/sender.
+ */
 function expectedSenderSignPub(state: State, env: Envelope): string | null {
   switch (env.type) {
     case "intro": {
       const si = env.sender_identity;
       if (!si) return null;
-      // Internal implementation note.
+      // The claimed identity must match the envelope's `from`; the caller also
+      // re-derives agent_id from sign_pub when validating the profile card.
       if (si.agent_id !== env.from) return null;
       return si.sign_pub;
     }
@@ -302,37 +350,44 @@ function expectedSenderSignPub(state: State, env: Envelope): string | null {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
- * Internal implementation note.
+ * Poll the transport for envelopes addressed to us and ingest them. Each is
+ * deduplicated (seen_env), checked for correct recipient and non-blocked sender,
+ * then signature-verified against expectedSenderSignPub before being applied.
+ * Returns counts of ingested/rejected envelopes plus per-event labels.
  */
-export function pollAndIngest(tp: Transport, state: State, collect?: ChannelCollector): IngestResult {
+export function pollAndIngest(tp: Transport, state: State, collect?: ChannelCollector, ackSink?: string[]): IngestResult {
   const result: IngestResult = { ingested: 0, rejected: 0, events: [] };
   if (!state.identity) return result;
   const me = state.identity.agent_id;
 
   for (const { env, ref } of tp.pollEnvelopes(me)) {
-    const drop = () => tp.deleteEnvelope(ref);
+    // When an ackSink is provided, defer the relay delete to the caller so it happens
+    // only after local state is durably saved (persist-before-acknowledge, rob-01).
+    const drop = () => {
+      if (ackSink) ackSink.push(ref);
+      else tp.deleteEnvelope(ref);
+    };
 
-    // Internal implementation note.
+    // Replay guard: skip (and ack) envelopes we've already processed.
     if (state.seen_env.includes(env.id)) {
       drop();
       continue;
     }
-    // Internal implementation note.
+    // Drop anything not addressed to us (relay may hand back misrouted items).
     if (env.to !== me) {
       result.rejected++;
       markSeen(state, env.id);
       drop();
       continue;
     }
-    // Internal implementation note.
+    // Silently discard envelopes from blocked senders without counting them as rejected.
     if (state.blocked.includes(env.from)) {
       markSeen(state, env.id);
       drop();
       continue;
     }
-    // Internal implementation note.
+    // Verify the Ed25519 signature against the key expected for this conversation;
+    // reject if no expected sender resolves or the signature is invalid.
     const signPub = expectedSenderSignPub(state, env);
     if (!signPub || !verifyEnvelope(env, signPub)) {
       result.rejected++;
@@ -361,17 +416,20 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
       if (!card || !verifyCard(card).ok) return null; // reject invalid signed/expired profiles
       if (card.owner !== env.from || card.sign_pub !== signPub) return null; // card owner/key binding
       if (env.from === state.identity!.agent_id) return null; // ignore self-intro
-      // Internal implementation note.
+      // Deduplicate by conversation: ignore an intro whose conversation is already
+      // active, pending outbound, archived, in the inbox, or previously seen.
       const conv = env.conversation_id;
       if (
         state.active_chat?.conversation_id === conv ||
         state.outbox_intro?.conversation_id === conv ||
         state.past_chats.some((c) => c.conversation_id === conv) ||
-        state.inbox_intros.some((i) => i.conversation_id === conv)
+        state.inbox_intros.some((i) => i.conversation_id === conv) ||
+        (state.seen_conversations ?? []).includes(conv)
       ) {
         return null;
       }
-      // Internal implementation note.
+      // Decrypt the optional first message with the sender's box key; on any
+      // decrypt failure, treat the intro as having no first message rather than rejecting it.
       const peer = identityFromCard(card);
       let firstMessage: string | undefined;
       if (env.body) {
@@ -382,8 +440,9 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
         }
       }
       const fmSan = firstMessage ? sanitizeIncoming(firstMessage) : undefined;
-      // Internal implementation note.
-      if (state.inbox_intros.length >= 50) state.inbox_intros.shift();
+      // FIFO-cap the inbox; record the conversation as seen so an evicted intro cannot be
+      // re-admitted as a fresh unread by a duplicate envelope (core-02).
+      if (state.inbox_intros.length >= INBOX_INTRO_CAP) state.inbox_intros.shift();
       const alias = card.display_name ?? env.from;
       const rec: IntroRecord = {
         intro_id: newId("intro"),
@@ -397,6 +456,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
         direction: "in",
       };
       state.inbox_intros.push(rec);
+      markConversation(state, conv);
       setNotify(state, "intro", env.from, alias, true);
       collect?.({
         kind: "intro",
@@ -483,7 +543,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
       chat.status = "ended";
       chat.ended_at = nowIso();
       if (!state.no_resuggest.includes(chat.partner.agent_id)) state.no_resuggest.push(chat.partner.agent_id);
-      state.past_chats.push(chat);
+      pushPastChat(state, chat);
       const who = chat.partner_profile.display_name ?? env.from;
       const conv = chat.conversation_id;
       state.active_chat = null;
@@ -497,7 +557,7 @@ function handleEnvelope(state: State, env: Envelope, signPub: string, collect?: 
   }
 }
 
-/** Internal implementation note. */
+/** True when the active chat has been idle for at least `settings.cold_days` days. */
 export function coldCheck(state: State, now: Date = new Date()): boolean {
   const chat = state.active_chat;
   if (!chat) return false;

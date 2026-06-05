@@ -1,7 +1,7 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Filesystem-backed persistence for the relay/directory server: profile cards
+// (directory/), per-recipient envelope inboxes (relay/), and an aggregate
+// analytics document. All writes are atomic (temp file + rename) and analytics
+// flushes are batched off the request hot path.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -38,11 +38,27 @@ function atomicWrite(path: string, data: string): void {
   renameSync(tmp, path);
 }
 
+// Bounds on the analytics document so it cannot grow without limit (notably via the
+// unauthenticated POST /relay path). Stale records TTL-expire; survivors are hard-capped.
+const ANALYTICS_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+const MAX_TRACKED_AGENTS = 50_000;
+const MAX_TRACKED_PRESENCE = 50_000;
+const MAX_TRACKED_CONVERSATIONS = 50_000;
+
+function capByLastSeen<T extends { last_seen_at: string }>(map: Record<string, T>, max: number): boolean {
+  const keys = Object.keys(map);
+  if (keys.length <= max) return false;
+  keys.sort((a, b) => Date.parse(map[a]!.last_seen_at) - Date.parse(map[b]!.last_seen_at));
+  for (const k of keys.slice(0, keys.length - max)) delete map[k];
+  return true;
+}
+
 export class ServerStore {
   readonly directoryDir: string;
   readonly relayDir: string;
   readonly analyticsPath: string;
   private analytics: AnalyticsFile;
+  private analyticsDirty = false;
 
   constructor(private readonly cfg: ServerStoreConfig) {
     this.directoryDir = join(cfg.root, "directory");
@@ -67,7 +83,18 @@ export class ServerStore {
     }
   }
 
-  private saveAnalytics(): void {
+  /**
+   * Mark analytics as needing a write. The actual disk flush is batched (see flush()) so the
+   * request hot path never pays a full-document synchronous serialize+fsync per observation.
+   */
+  private markAnalyticsDirty(): void {
+    this.analyticsDirty = true;
+  }
+
+  /** Persist analytics to disk only if dirty. Driven by a flush timer and called on shutdown. */
+  flush(): void {
+    if (!this.analyticsDirty) return;
+    this.analyticsDirty = false;
     atomicWrite(this.analyticsPath, JSON.stringify(this.analytics, null, 2));
   }
 
@@ -99,9 +126,9 @@ export class ServerStore {
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Paginate the directory of profile cards, skipping expired ones and applying optional
+   * mode/country filters. `cursor` is the file-index offset of the next unscanned card;
+   * `nextCursor` is null when the directory has been fully scanned.
    */
   listCards(
     opts: { limit?: number; mode?: string; country?: string; cursor?: string } = {},
@@ -111,21 +138,23 @@ export class ServerStore {
     const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
     const allFiles = readdirSync(this.directoryDir).filter((f) => f.endsWith(".json")).sort();
     const offset = opts.cursor ? Math.max(0, Number.parseInt(opts.cursor, 10) || 0) : 0;
-    const slice = allFiles.slice(offset, offset + limit);
     const out: ProfileCard[] = [];
-    for (const f of slice) {
+    // Read forward from the cursor until `limit` cards pass the filters (or files run out),
+    // so a filtered query returns a full page instead of advancing the cursor by `limit`
+    // raw files and forcing the pager through many near-empty pages.
+    let i = offset;
+    for (; i < allFiles.length && out.length < limit; i++) {
       try {
-        const card = JSON.parse(readFileSync(join(this.directoryDir, f), "utf8")) as ProfileCard;
+        const card = JSON.parse(readFileSync(join(this.directoryDir, allFiles[i]!), "utf8")) as ProfileCard;
         if (card.expires_at && Date.parse(card.expires_at) <= now.getTime()) continue;
         if (opts.mode && !(card.matching_modes ?? []).includes(opts.mode as never)) continue;
         if (opts.country && card.country?.toLowerCase() !== opts.country.toLowerCase()) continue;
         out.push(card);
       } catch {
-        /* Internal implementation note. */
+        /* skip unreadable/corrupt card files */
       }
     }
-    const consumed = offset + slice.length;
-    const nextCursor = consumed < allFiles.length ? String(consumed) : null;
+    const nextCursor = i < allFiles.length ? String(i) : null;
     return { cards: out, nextCursor };
   }
 
@@ -141,8 +170,9 @@ export class ServerStore {
   }
 
   /**
-   * Internal implementation note.
-   * Internal implementation note.
+   * Store an envelope in the recipient's inbox. Returns false (without writing) when the inbox
+   * is already at inboxMax and this is a new envelope id, so a flood cannot grow an inbox without
+   * bound; re-delivering an existing id always overwrites in place.
    */
   putEnvelope(env: Envelope): boolean {
     const dir = this.inboxDir(env.to);
@@ -160,7 +190,7 @@ export class ServerStore {
     return readdirSync(dir).filter((f) => f.endsWith(".json")).length;
   }
 
-  /** Internal implementation note. */
+  /** Return a recipient's envelopes oldest-first, lazily deleting any past envelopeTtlMs or unreadable. */
   listEnvelopes(agentId: string, now: Date = new Date()): Envelope[] {
     const dir = this.inboxDir(agentId);
     if (!existsSync(dir)) return [];
@@ -188,14 +218,15 @@ export class ServerStore {
     return out.map((x) => x.env);
   }
 
-  /** Internal implementation note. */
+  /** Remove a single envelope (e.g. after the recipient acks it); no-op on malformed ids. */
   deleteEnvelope(agentId: string, envId: string): void {
     if (!isAgentId(agentId) || !isPrefixedId(envId, "env")) return;
     const p = this.envPath(agentId, envId);
     if (existsSync(p)) rmSync(p);
   }
 
-  // Internal implementation note.
+  // Record an agent sighting for analytics, preserving first_seen_at and bumping last_seen_at.
+  // Country code is normalized to ZZ unless it is a valid ISO 3166-1 alpha-2 pair.
   observeAgent(agentId: string, countryCode: string, now: Date = new Date()): void {
     if (!isAgentId(agentId)) return;
     const ts = now.toISOString();
@@ -206,11 +237,14 @@ export class ServerStore {
       first_seen_at: prev?.first_seen_at ?? ts,
       last_seen_at: ts,
     };
-    this.saveAnalytics();
+    this.markAnalyticsDirty();
   }
 
   observeEnvelope(env: Envelope, senderCountryCode: string, now: Date = new Date()): void {
     this.observeAgent(env.from, senderCountryCode, now);
+    // conversation_id is attacker-controlled on the unauthenticated POST /relay path; only
+    // track well-formed ids so a missing/garbage value cannot become a stray map key (sec-01).
+    if (!isPrefixedId(env.conversation_id, "chat")) return;
     const ts = now.toISOString();
     if (env.type === "intro_accept" || env.type === "message") {
       this.analytics.conversations[env.conversation_id] = {
@@ -218,19 +252,19 @@ export class ServerStore {
         started_at: this.analytics.conversations[env.conversation_id]?.started_at ?? ts,
         last_seen_at: ts,
       };
-      this.saveAnalytics();
+      this.markAnalyticsDirty();
       return;
     }
     if (env.type === "end" || env.type === "intro_decline") {
       delete this.analytics.conversations[env.conversation_id];
-      this.saveAnalytics();
+      this.markAnalyticsDirty();
     }
   }
 
   observePresence(agentId: string, now: Date = new Date()): void {
     if (!isAgentId(agentId)) return;
     this.analytics.presence[agentId] = { last_seen_at: now.toISOString() };
-    this.saveAnalytics();
+    this.markAnalyticsDirty();
   }
 
   presenceFor(agentId: string, onlineTtlMs: number, recentTtlMs: number, now: Date = new Date()): PresenceInfo {
@@ -259,7 +293,7 @@ export class ServerStore {
         changed = true;
       }
     }
-    if (changed) this.saveAnalytics();
+    if (changed) this.markAnalyticsDirty();
 
     const countries = new Map<string, number>();
     for (const agent of Object.values(this.analytics.agents)) {
@@ -292,7 +326,8 @@ export class ServerStore {
     };
   }
 
-  // Internal implementation note.
+  // Sweep expired profile cards (past expires_at) and stale envelopes (older than envelopeTtlMs
+  // by mtime), then prune the analytics maps. Returns counts of what was removed.
   gc(now: Date = new Date()): { cardsRemoved: number; envelopesRemoved: number } {
     let cardsRemoved = 0;
     let envelopesRemoved = 0;
@@ -335,7 +370,30 @@ export class ServerStore {
         }
       }
     }
+    this.pruneAnalytics(now);
     return { cardsRemoved, envelopesRemoved };
+  }
+
+  /** TTL-expire then hard-cap the analytics maps so they cannot grow without bound (sec-01). */
+  private pruneAnalytics(now: Date = new Date()): void {
+    const cutoff = now.getTime() - ANALYTICS_TTL_MS;
+    let changed = false;
+    for (const [id, a] of Object.entries(this.analytics.agents)) {
+      if (Date.parse(a.last_seen_at) < cutoff) {
+        delete this.analytics.agents[id];
+        changed = true;
+      }
+    }
+    for (const [id, p] of Object.entries(this.analytics.presence)) {
+      if (Date.parse(p.last_seen_at) < cutoff) {
+        delete this.analytics.presence[id];
+        changed = true;
+      }
+    }
+    changed = capByLastSeen(this.analytics.agents, MAX_TRACKED_AGENTS) || changed;
+    changed = capByLastSeen(this.analytics.presence, MAX_TRACKED_PRESENCE) || changed;
+    changed = capByLastSeen(this.analytics.conversations, MAX_TRACKED_CONVERSATIONS) || changed;
+    if (changed) this.markAnalyticsDirty();
   }
 
   stats(): { cards: number; inboxes: number; envelopes: number } {

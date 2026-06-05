@@ -1,17 +1,23 @@
-// Internal implementation note.
+// Shared protocol/domain types for identity, profiles, envelopes, chat, and channel state.
 
 export const PROTOCOL_VERSION = "0.1";
 
 export type MatchingMode = "dating" | "builder" | "friend" | "founder";
 
-/** Internal implementation note. */
+/** Standard `{ ok, message }` result returned by engine/messaging operations. */
+export interface OpResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Shareable identity: agent_id (hash of sign_pub) plus the Ed25519 sign and x25519 box public keys. */
 export interface PublicIdentity {
   agent_id: string;
   sign_pub: string;
   box_pub: string;
 }
 
-/** Internal implementation note. */
+/** Full local identity: public keys plus the private Ed25519/x25519 key material (never shared). */
 export interface Identity extends PublicIdentity {
   sign_priv: string; // Ed25519 private seed (base64url raw 32B)
   box_priv: string; // X25519 private scalar (base64url raw 32B)
@@ -24,7 +30,7 @@ export interface Proof {
   verified_at?: string;
 }
 
-/** Internal implementation note. */
+/** Canonicalized, signed profile card published to the directory; signature covers all other fields. */
 export interface ProfileCard {
   type: "profile_card";
   version: string;
@@ -48,7 +54,7 @@ export interface ProfileCard {
   signature?: string;
 }
 
-/** Internal implementation note. */
+/** Liveness info derived from a peer's last-seen timestamp, attached to directory results. */
 export interface PresenceInfo {
   status: "online" | "recently_seen" | "offline";
   last_seen_at?: string;
@@ -57,7 +63,7 @@ export interface PresenceInfo {
 
 export type PublicProfileCard = ProfileCard & { presence?: PresenceInfo };
 
-/** Internal implementation note. */
+/** Raw user-supplied profile inputs, before they are built into a signed ProfileCard. */
 export interface ProfileAnswers {
   display_name?: string;
   country: string;
@@ -71,7 +77,7 @@ export interface ProfileAnswers {
   home_relay?: string;
 }
 
-/** Internal implementation note. */
+/** Encrypted payload: x25519 ECDH + HKDF-derived AES-256-GCM, with iv/salt/ciphertext/tag base64url-encoded. */
 export interface CipherBlob {
   alg: "x25519-aesgcm";
   iv: string; // base64url
@@ -87,7 +93,7 @@ export type EnvelopeType =
   | "message"
   | "end";
 
-/** Internal implementation note. */
+/** Signed relay envelope; the signature covers the canonicalized envelope minus the signature field. */
 export interface Envelope {
   type: EnvelopeType;
   v: string;
@@ -97,10 +103,10 @@ export interface Envelope {
   conversation_id: string;
   created_at: string;
   nonce: string;
-  // Internal implementation note.
+  // Sender's identity/profile, included on intro-type envelopes so the recipient can verify and display them.
   sender_identity?: PublicIdentity;
   sender_profile?: PublicProfileCard;
-  // Internal implementation note.
+  // Encrypted message content; absent on control envelopes (e.g. decline/end) that carry no payload.
   body?: CipherBlob;
   signature?: string;
 }
@@ -131,7 +137,7 @@ export interface Chat {
 export interface IntroRecord {
   intro_id: string;
   conversation_id: string;
-  // Internal implementation note.
+  // The other party to the intro: the sender for inbound records, the target for outbound ones.
   peer: PublicIdentity;
   to: string;
   profile: PublicProfileCard;
@@ -166,6 +172,9 @@ export interface State {
   no_resuggest: string[];
   reports: { agent_id: string; reason: string; at: string }[];
   seen_env: string[];
+  // conversation_ids of intros already admitted, so an intro evicted from the 50-slot
+  // inbox cannot be re-admitted as a fresh unread on a duplicate envelope.
+  seen_conversations: string[];
   notifications: NotificationState;
   settings: Settings;
 }
@@ -177,9 +186,9 @@ export interface MatchResult {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
- * Internal implementation note.
+ * A single normalized event surfaced on the live channel feed (intro, accept,
+ * decline, message, or end). `text` holds decrypted message content when present,
+ * and `flagged`/`flags` carry context-firewall results from sanitizing peer text.
  */
 export interface ChannelItem {
   kind: "intro" | "accepted" | "declined" | "message" | "ended";

@@ -1,11 +1,10 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Resolves runtime context: filesystem paths for local home/net state and
+// optional relay/directory server config, all derived from environment
+// variables with sensible defaults under the user's home directory.
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-/** Internal implementation note. */
+/** Relay/directory server endpoint plus an optional bearer access token. */
 export interface ServerConfig {
   baseUrl: string;
   accessToken?: string;
@@ -25,7 +24,11 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-/** Internal implementation note. */
+/**
+ * Picks the server base URL from TL_SERVER / TL_RELAY_URL / TL_DIRECTORY_URL
+ * (in that order), returning null when none is set. Trims and strips trailing
+ * slashes, and attaches TL_RELAY_ACCESS_TOKEN as the access token when present.
+ */
 export function resolveServer(env: NodeJS.ProcessEnv): ServerConfig | null {
   const raw = env.TL_SERVER || env.TL_RELAY_URL || env.TL_DIRECTORY_URL;
   if (!raw || !raw.trim()) return null;

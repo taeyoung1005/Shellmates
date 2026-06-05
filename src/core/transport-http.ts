@@ -1,7 +1,6 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// HTTP Transport: talks to the relay/directory server over signed requests.
+// Mutating and self-addressed reads carry an Ed25519 auth header (signAuth);
+// directory writes/reads only need the optional admission access token.
 import { signAuth } from "./crypto.js";
 import { verifyCard } from "./profile.js";
 import { syncFetch, type SyncResponse } from "./sync-fetch.js";
@@ -11,16 +10,13 @@ import { isAgentId } from "./util.js";
 
 export class HttpTransport implements Transport {
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Per-request timeout for read/poll operations, in ms.
+   * Sourced from TL_HTTP_TIMEOUT_MS; undefined leaves syncFetch on its default.
    */
   private readonly readTimeoutMs: number | undefined;
   /**
-   * Internal implementation note.
-   * Internal implementation note.
-   * Internal implementation note.
+   * Per-request timeout for write operations (publish/send/heartbeat), in ms.
+   * Sourced from TL_HTTP_WRITE_TIMEOUT_MS; undefined uses syncFetch's default.
    */
   private readonly writeTimeoutMs: number | undefined;
 
@@ -35,14 +31,14 @@ export class HttpTransport implements Transport {
     this.writeTimeoutMs = Number.isFinite(wt) && wt > 0 ? Math.floor(wt) : undefined;
   }
 
-  // Internal implementation note.
+  // JSON content-type plus the optional admission access token; no per-request signature.
   private baseHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const h: Record<string, string> = { "content-type": "application/json", ...extra };
     if (this.accessToken) h["x-tl-access"] = this.accessToken; // admission gate
     return h;
   }
 
-  /** Internal implementation note. */
+  /** baseHeaders plus an Ed25519 signature over method+path, proving identity to the relay. */
   private authHeaders(method: string, path: string): Record<string, string> {
     const id = this.getIdentity();
     if (!id) throw new Error("This operation requires an identity; run init first.");
@@ -53,7 +49,7 @@ export class HttpTransport implements Transport {
     return this.baseUrl + path;
   }
 
-  /** Internal implementation note. */
+  /** Like syncFetch but swallows network/transport errors into null instead of throwing. */
   private safeFetch(url: string, opts: Parameters<typeof syncFetch>[1]): SyncResponse | null {
     try {
       return syncFetch(url, opts);
@@ -85,7 +81,7 @@ export class HttpTransport implements Transport {
   revokeCard(agentId: string): void {
     if (!isAgentId(agentId)) return;
     const path = `/directory/${agentId}`;
-    // Internal implementation note.
+    // Best-effort revoke: signed DELETE, errors ignored (safeFetch) since revocation is idempotent.
     this.safeFetch(this.url(path), { method: "DELETE", headers: this.authHeaders("DELETE", path), timeoutMs: this.readTimeoutMs });
   }
 
@@ -94,9 +90,9 @@ export class HttpTransport implements Transport {
     const MAX_PAGES = 100;
     const out: PublicProfileCard[] = [];
     let cursor: string | undefined;
-    let more = false;
-    // Internal implementation note.
-    // Internal implementation note.
+    // Page through the directory, verifying each card. The server caps a page at the relay's
+    // own limit; we stop on the first page without a next_cursor, on error, or at MAX_PAGES.
+    let hitPageCap = false;
     for (let page = 0; page < MAX_PAGES; page++) {
       const qs = new URLSearchParams();
       qs.set("limit", String(pageSize));
@@ -104,30 +100,25 @@ export class HttpTransport implements Transport {
       if (query?.country) qs.set("country", query.country);
       if (cursor) qs.set("cursor", cursor);
       const res = this.safeFetch(this.url(`/directory?${qs.toString()}`), { method: "GET", headers: this.baseHeaders(), timeoutMs: this.readTimeoutMs });
-      if (!res || res.status >= 300) {
-        more = false;
-        break;
-      }
+      if (!res || res.status >= 300) break;
       const data = HttpTransport.parseJson(res) as { cards?: unknown; next_cursor?: unknown; presence?: Record<string, PresenceInfo> } | null;
-      // Internal implementation note.
+      // Defensive: a malformed/non-array `cards` becomes an empty page rather than a throw.
       const cards = Array.isArray(data?.cards) ? (data!.cards as ProfileCard[]) : [];
-      // Internal implementation note.
       for (const c of cards) {
         try {
           if (verifyCard(c, now).ok) out.push({ ...c, presence: data?.presence?.[c.owner] ?? { status: "offline" } });
         } catch {
-          /* Internal implementation note. */
+          /* skip cards that fail verification */
         }
       }
       const next = typeof data?.next_cursor === "string" ? data.next_cursor : null;
-      if (!next) {
-        more = false;
-        break;
-      }
+      if (!next) break;
       cursor = next;
-      more = true;
+      // We consumed a full page and the server still has more; if this was the last allowed
+      // page, the loop exits below with results truncated.
+      if (page === MAX_PAGES - 1) hitPageCap = true;
     }
-    if (more) {
+    if (hitPageCap) {
       process.stderr.write(
         `[tl] Directory scan hit the cap(${MAX_PAGES}pages, ~${MAX_PAGES * pageSize}cards). Increase --limit or narrow with mode/country filters.\n`,
       );
@@ -158,13 +149,13 @@ export class HttpTransport implements Transport {
 
   pollEnvelopes(myAgentId: string): PolledEnvelope[] {
     const path = `/relay/${myAgentId}`;
-    // Internal implementation note.
+    // Signed GET on our own mailbox; the relay only returns envelopes addressed to this agent.
     const res = this.safeFetch(this.url(path), { method: "GET", headers: this.authHeaders("GET", path), timeoutMs: this.readTimeoutMs });
     if (!res || res.status >= 300) return [];
     const data = HttpTransport.parseJson(res) as { envelopes?: unknown } | null;
-    // Internal implementation note.
+    // Defensive: a malformed/non-array `envelopes` field yields an empty list rather than throwing.
     const envelopes = Array.isArray(data?.envelopes) ? (data!.envelopes as Envelope[]) : [];
-    // Internal implementation note.
+    // Drop entries lacking a string id; ref is the envelope id used later to ack/delete.
     return envelopes.filter((env) => env && typeof env === "object" && typeof env.id === "string").map((env) => ({ env, ref: env.id }));
   }
 
@@ -172,7 +163,7 @@ export class HttpTransport implements Transport {
     const id = this.getIdentity();
     if (!id) return;
     const path = `/relay/${id.agent_id}/${ref}`;
-    // Internal implementation note.
+    // Best-effort ack: signed DELETE removes the consumed envelope; failures are ignored (safeFetch).
     this.safeFetch(this.url(path), { method: "DELETE", headers: this.authHeaders("DELETE", path), timeoutMs: this.readTimeoutMs });
   }
 

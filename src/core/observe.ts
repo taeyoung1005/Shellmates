@@ -1,15 +1,18 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Local "observe" pass: scans the user's own coding-assistant transcripts
+// (~/.claude, ~/.codex JSON/JSONL) and drafts a profile from them, via an LLM
+// when available and a keyword-frequency heuristic otherwise. All reading is
+// local and read-only; nothing here leaves the machine.
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultLlm, extractJson, type LlmFn } from "./llm.js";
 import type { MatchingMode, ProfileAnswers } from "./types.js";
 
-// Internal implementation note.
+// Per-transcript-line snippet cap, and the overall corpus cap handed to the LLM draft prompt.
+const SNIPPET_MAX_CHARS = 2000;
+const LLM_CORPUS_MAX_CHARS = 16000;
+
+// Known tech-stack labels the heuristic counts occurrences of in the corpus.
 const STACK_VOCAB = [
   "TypeScript", "JavaScript", "Python", "Rust", "Go", "Java", "Kotlin", "Swift", "Ruby", "C++", "C#",
   "React", "Next.js", "Vue", "Svelte", "Angular", "Node", "Deno", "Bun",
@@ -19,7 +22,7 @@ const STACK_VOCAB = [
   "Tailwind", "WebAssembly", "Electron",
 ];
 
-// Internal implementation note.
+// Interest categories, each scored by the summed frequency of its trigger terms.
 const INTEREST_VOCAB: { label: string; terms: string[] }[] = [
   { label: "AI Products", terms: ["ai product", "llm", "gpt", "claude", "agent", "rag", "prompt", "agent", "artificial intelligence"] },
   { label: "AI Agents", terms: ["agentic", "mcp", "tool use", "autonomous agent", "subagent"] },
@@ -51,7 +54,8 @@ export interface ObserveOptions {
   maxFiles?: number;
 }
 
-/** Internal implementation note. */
+/** Pull (role, text) pairs from one transcript record, tolerating both the
+ *  `{message:{role,content}}` wrapper and bare shapes, and string or array content. */
 function extractLineTexts(obj: unknown): { role: string; text: string }[] {
   if (!obj || typeof obj !== "object") return [];
   const o = obj as Record<string, unknown>;
@@ -76,7 +80,8 @@ function extractLineTexts(obj: unknown): { role: string; text: string }[] {
   return out;
 }
 
-/** Internal implementation note. */
+/** Read a file as UTF-8, but cap large files at their first `maxBytes` bytes
+ *  to avoid loading huge transcripts into memory. */
 function readBoundedUtf8(path: string, size: number, maxBytes: number): string {
   if (size <= maxBytes) return readFileSync(path, "utf8");
   const fd = openSync(path, "r");
@@ -89,7 +94,9 @@ function readBoundedUtf8(path: string, size: number, maxBytes: number): string {
   }
 }
 
-/** Internal implementation note. */
+/** Recursively gather .json/.jsonl transcripts under the roots, newest first,
+ *  and accumulate their text snippets into a corpus (and a user-only subset)
+ *  until the per-file and total char caps are hit. */
 function collectCorpus(roots: string[], maxFiles: number, maxChars: number): { corpus: string; userText: string; scannedFiles: number } {
   const files: { path: string; mtime: number; size: number }[] = [];
   const walk = (dir: string, depth: number): void => {
@@ -115,7 +122,8 @@ function collectCorpus(roots: string[], maxFiles: number, maxChars: number): { c
   for (const r of roots) if (existsSync(r)) walk(r, 0);
   files.sort((a, b) => b.mtime - a.mtime);
 
-  // Internal implementation note.
+  // Generous byte budget per file: JSON overhead plus multi-byte chars mean far
+  // more raw bytes than usable chars, so allow at least 64 KiB or 4x maxChars.
   const perFileCap = Math.max(64 * 1024, maxChars * 4);
   const parts: string[] = [];
   const userParts: string[] = [];
@@ -140,7 +148,7 @@ function collectCorpus(roots: string[], maxFiles: number, maxChars: number): { c
         continue;
       }
       for (const { role, text } of extractLineTexts(obj)) {
-        const snippet = text.slice(0, 2000);
+        const snippet = text.slice(0, SNIPPET_MAX_CHARS);
         parts.push(snippet);
         if (/user|human/i.test(role)) userParts.push(snippet);
         chars += snippet.length;
@@ -161,26 +169,27 @@ function topMatches<T>(items: T[], scoreFn: (t: T) => number, n: number): T[] {
     .map((x) => x.t);
 }
 
+// Callers lower-case both corpus and needle before calling, so this is a plain
+// non-overlapping substring count.
 function countOccurrences(haystack: string, needle: string): number {
   if (!needle) return 0;
   let count = 0;
   let idx = 0;
-  const lower = haystack;
-  const nlower = needle;
   for (;;) {
-    const f = lower.indexOf(nlower, idx);
+    const f = haystack.indexOf(needle, idx);
     if (f < 0) break;
     count++;
-    idx = f + nlower.length;
+    idx = f + needle.length;
   }
   return count;
 }
 
-/** Internal implementation note. */
+/** LLM-free fallback: derive a profile from keyword frequency, script detection,
+ *  and rough message-length/question-ratio style cues. */
 function heuristicDraft(corpus: string, userText: string): ProfileAnswers {
   const lc = corpus.toLowerCase();
 
-  // Internal implementation note.
+  // Pick the 6 most-mentioned stacks by case-insensitive occurrence count.
   const uniqStacks = [...new Set(STACK_VOCAB)];
   const stacks = [...new Set(topMatches(uniqStacks, (s) => countOccurrences(lc, s.toLowerCase()), 6))];
   const interests = topMatches(
@@ -196,7 +205,8 @@ function heuristicDraft(corpus: string, userText: string): ProfileAnswers {
   if (/[a-z]{4,}/i.test(corpus)) languages.push("English");
   if (languages.length === 0) languages.push("English");
 
-  // Internal implementation note.
+  // Infer communication style from the user's own lines: a high question ratio
+  // reads as curious, long average length as thorough, short as concise.
   const userLines = userText.split("\n").filter(Boolean);
   const avgLen = userLines.length ? userLines.reduce((a, l) => a + l.length, 0) / userLines.length : 0;
   const questionRatio = userLines.length ? userLines.filter((l) => l.includes("?") || /[?？]/.test(l)).length / userLines.length : 0;
@@ -228,7 +238,7 @@ function llmDraft(corpus: string, llm: LlmFn): ProfileAnswers | null {
   const prompt =
     "From the following (truncated, local) transcript excerpts, infer the developer's profile traits as JSON.\n\n" +
     "=== EXCERPTS START ===\n" +
-    corpus.slice(0, 16000) +
+    corpus.slice(0, LLM_CORPUS_MAX_CHARS) +
     "\n=== EXCERPTS END ===\n\nReturn ONLY the JSON object.";
   const out = llm(prompt, { system: SYSTEM_PROMPT, maxTokens: 700 });
   if (!out) return null;
@@ -247,7 +257,9 @@ function llmDraft(corpus: string, llm: LlmFn): ProfileAnswers | null {
   return draft;
 }
 
-/** Internal implementation note. */
+/** Entry point: collect the local transcript corpus and return a profile draft,
+ *  preferring an LLM summary and falling back to the heuristic (or an empty draft
+ *  when no history is found). */
 export function observeProfile(opts: ObserveOptions = {}): ObserveResult {
   const roots = opts.roots ?? [join(homedir(), ".claude", "projects"), join(homedir(), ".codex")];
   const maxFiles = opts.maxFiles ?? 200;

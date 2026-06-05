@@ -1,7 +1,6 @@
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
-// Internal implementation note.
+// Helper for detecting whether this module was launched directly as the
+// process entry point (the ESM equivalent of `require.main === module`),
+// used by CLI/server bundles to decide whether to auto-run on import.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 

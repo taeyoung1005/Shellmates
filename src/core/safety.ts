@@ -1,5 +1,8 @@
-// Internal implementation note.
-// Internal implementation note.
+// Detects prompt-injection / contact-exfiltration patterns and neutralizes hidden characters
+// in untrusted inbound peer text before it is surfaced to the model or displayed.
+import { STRIP_INVISIBLE, stripInvisibleForDisplay } from "./util.js";
+
+const INCOMING_TEXT_MAX_CHARS = 8000;
 
 const INJECTION_PATTERNS: { label: string; re: RegExp }[] = [
   { label: "ignore-previous", re: /ignore\s+(all\s+|the\s+)?previous/i },
@@ -24,12 +27,6 @@ const CONTACT_PATTERNS: { type: string; re: RegExp }[] = [
   { type: "url", re: /\bhttps?:\/\/[^\s]+/i },
 ];
 
-// Internal implementation note.
-const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]", "g");
-// Internal implementation note.
-// Internal implementation note.
-const ZW_FORMAT = new RegExp("[\\u200B-\\u200F\\u2060\\uFEFF\\u202A-\\u202E\\u2066-\\u2069]", "g");
-
 export interface SanitizeResult {
   text: string;
   flagged: boolean;
@@ -37,8 +34,8 @@ export interface SanitizeResult {
 }
 
 export function detectInjection(text: string): string[] {
-  // Internal implementation note.
-  const probe = String(text).replace(ZW_FORMAT, "");
+  // Strip hidden characters first so patterns can't be split by zero-width/bidi insertions.
+  const probe = String(text).replace(STRIP_INVISIBLE, "");
   const found: string[] = [];
   for (const { label, re } of INJECTION_PATTERNS) {
     if (re.test(probe)) found.push(label);
@@ -61,11 +58,15 @@ export function detectContact(text: string): ContactHit[] {
 }
 
 /**
- * Internal implementation note.
- * Internal implementation note.
+ * Sanitizes untrusted inbound peer text before it reaches the model or UI:
+ * strips invisible characters, truncates to INCOMING_TEXT_MAX_CHARS, and flags
+ * any prompt-injection or contact-exfiltration patterns it contains.
  */
 export function sanitizeIncoming(text: string): SanitizeResult {
-  const cleaned = String(text).replace(CONTROL_CHARS, "").slice(0, 8000);
+  // Strip hidden characters from the RETURNED text too (not just the detection probe) so the
+  // body shown to the model/UI carries no zero-width or bidi-override residue (sec-03), while
+  // keeping ZWNJ/ZWJ so legitimate emoji sequences are not mangled.
+  const cleaned = stripInvisibleForDisplay(text).slice(0, INCOMING_TEXT_MAX_CHARS);
   const inj = detectInjection(cleaned).map((l) => `injection:${l}`);
   const contact = detectContact(cleaned).map((c) => `contact:${c.type}`);
   const flags = [...inj, ...contact];
